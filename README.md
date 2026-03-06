@@ -21,7 +21,8 @@ The agent core comprises approximately 200 lines of code.
 
 The following example demonstrates learning and decision-making in a textually represented grid-world environment adapted from [NACE](https://github.com/patham9/NACE):
 
-![mettaclaw_in_nace_world](https://github.com/user-attachments/assets/2fadead8-af73-46fc-bec4-4b0974221311)
+![mettaclaw_in_nace_world](https://github.com/user-attachments/assets/c6c01839-234d-4505-baf6-4f2f3787c7b9)
+
 
 This project also aims to explore the potential of Agentic Physical AI, a ROS2 package for mobile robots with manipulators is underway.
 

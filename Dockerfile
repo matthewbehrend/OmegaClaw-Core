@@ -18,6 +18,7 @@ RUN apt-get update \
       ca-certificates \
       pkg-config \
       cmake \
+      iptables \
  && rm -rf /var/lib/apt/lists/*
 
 FROM os as build
@@ -71,7 +72,7 @@ RUN pip3 install --no-cache-dir --break-system-packages janus-swi
 # 👇 METTACLAW INSTALL
 WORKDIR /PeTTa
 RUN mkdir -p repos
-RUN git clone --depth 1 https://github.com/patham9/mettaclaw repos/mettaclaw
+RUN git clone --depth 1 https://github.com/jazzbox35/mettaclaw repos/mettaclaw
 RUN python3 -m pip install --no-cache-dir --break-system-packages openai
 RUN cp repos/mettaclaw/run.metta ./
 
@@ -80,7 +81,10 @@ RUN cp repos/mettaclaw/run.metta ./
 #RUN pip install torch --no-cache-dir --break-system-package \
 #     --index-url https://download.pytorch.org/whl/cpu
 
+# 👇 FIREWALL ENTRYPOINT — copied from cloned repo
+RUN cp repos/mettaclaw/firewall.sh /firewall.sh \
+ && chmod +x /firewall.sh
 
 WORKDIR /PeTTa
-
+ENTRYPOINT ["/firewall.sh"]
 CMD ["sh", "run.sh", "run.metta", "default"]

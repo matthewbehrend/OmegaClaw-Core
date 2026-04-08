@@ -5,9 +5,6 @@
 </p>
 
 
-> **An agentic AI system implemented in MeTTa.**
->
-> Embedding-based long-term memory, OpenClaw-like tools, and a transparent MeTTa implementation.
 
 ---
 

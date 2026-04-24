@@ -282,7 +282,7 @@ Defaults are recommended for smooth operation. To customize, add parameters insi
 | `sleepInterval` | 1 | Delay between loop iterations (seconds) |
 | `wakeupInterval` | 600 | How long idle before the next scheduled wake-up (seconds) |
 | `LLM` | `gpt-5.4` | Model identifier passed to the provider (OpenAI only) |
-| `provider` | `Anthropic` | LLM provider — `Anthropic`, `OpenAI`, or `ASICloud` |
+| `provider` | `ASIOne` | LLM provider — `ASIOne`, `ASICloud`, `Anthropic`, `OpenAI` |
 | `maxOutputToken` | 6000 | Output cap passed to the provider |
 | `reasoningMode` | `medium` | Reasoning-effort hint passed to the provider (OpenAI only) |
 
@@ -300,13 +300,13 @@ Defaults are recommended for smooth operation. To customize, add parameters insi
 
 | Parameter | Default | Meaning |
 |---|---|---|
-| `commchannel` | `irc` or `telegram` | Type of the communication channel for agent to use. Default value is `irc`. |
+| `commchannel` | `irc` | Type of the communication channel for agent to use - `irc` or `telegram` |
 | `IRC_channel` | `##omegaclaw` | IRC channel to join |
 | `IRC_server` | `irc.quakenet.org` | IRC server hostname |
 | `IRC_port` | 6667 | IRC port |
 | `IRC_user` | `omegaclaw` | IRC nickname |
-| `TG_BOT_TOKEN` | string | Telegram bot token. |
-| `TG_POLL_TIMEOUT` | number | Telegram polling timeout in seconds. Default value is 20. |
+| `TG_BOT_TOKEN` |  | Telegram bot token. |
+| `TG_POLL_TIMEOUT` | 20 | Telegram polling timeout in seconds. |
 
 ### Parameter Design
 

@@ -16,10 +16,15 @@ ANTHROPIC_CLIENT = _init_openai_client(
     base_url="https://api.anthropic.com/v1/"
 )
 
+ASIONE_CLIENT = _init_openai_client(
+    var_name="ASIONE_API_KEY",
+    base_url="https://api.asi1.ai/v1"
+)
+
 def _clean(text):
     return text.replace("_quote_", '"').replace("_apostrophe_", "'")
 
-def _chat(client, model, content, max_tokens=6000):
+def _chat(client, model, content, max_tokens=6000, **kwargs):
     try:
         resp = client.chat.completions.create(
             model=model,
@@ -28,7 +33,8 @@ def _chat(client, model, content, max_tokens=6000):
             extra_body={
                 "enable_thinking": True,
                 "thinking_budget": 6000 
-            }
+            },
+            **kwargs
         )
         return _clean(resp.choices[0].message.content)
     except Exception as e:
@@ -48,6 +54,15 @@ def useClaude(content):
         model="claude-opus-4-6",
         content=content
     )
+
+def useAsi1(content):
+    resp = _chat(
+        client=ASIONE_CLIENT,
+        model="asi1", # "asi1-ultra"
+        content=content
+    )
+    resp = resp.replace("</arg_value>", " ").replace("</tool_call>", " ")
+    return resp
 
 _embedding_model = None
 

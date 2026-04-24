@@ -139,19 +139,19 @@ memory/history.metta      episodic trace (written at runtime)
 Each iteration of `(omegaclaw $k)` in `src/loop.metta` performs:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│ 1. receive()        pull latest message from channel    │
-│ 2. getContext()     PROMPT + SKILLS +                   │
-│                     LAST_SKILL_USE_RESULTS +            │
-│                     HISTORY + TIME                      │
-│ 3. LLM call         Anthropic / OpenAI / ASICloud       │
-│ 4. sread / balance  parse response into skill s-exprs   │
-│ 5. eval each skill  (remember ...), (metta ...), ...    │
-│ 6. addToHistory     append human msg + response +       │
-│                     any errors                          │
-│ 7. sleep            sleepInterval seconds               │
-│ 8. recurse          (omegaclaw (+ 1 $k))                │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ 1. receive()        pull latest message from channel        │
+│ 2. getContext()     PROMPT + SKILLS +                       │
+│                     LAST_SKILL_USE_RESULTS +                │
+│                     HISTORY + TIME                          │
+│ 3. LLM call         Anthropic / OpenAI / ASICloud / ASI:One │
+│ 4. sread / balance  parse response into skill s-exprs       │
+│ 5. eval each skill  (remember ...), (metta ...), ...        │
+│ 6. addToHistory     append human msg + response +           │
+│                     any errors                              │
+│ 7. sleep            sleepInterval seconds                   │
+│ 8. recurse          (omegaclaw (+ 1 $k))                    │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 If no new message arrives and the `loops` counter hits zero, the agent idles until `nextWakeAt`, then runs one wake loop for background work.
@@ -188,7 +188,7 @@ user message
                   lib_chromadb.remember(str, vec, timestamp)
 ```
 
-For a **grounded** write with provenance, the pattern is the same, but the LLM first queries memory, then fetches from a verified source before calling `remember`. See [tutorial-08-grounded-reasoning.md](./tutorial-08-grounded-reasoning.md).
+For a **grounded** write with provenance, the pattern is the same, but the LLM first queries memory, then fetches from a verified source before calling `remember`. See [tutorial-07-grounded-reasoning.md](./tutorial-07-grounded-reasoning.md).
 
 ### Three-tier memory interaction
 
@@ -314,7 +314,7 @@ See [reference-orchestration.md](./reference-orchestration.md) for each layer.
 
 ### External grounding
 
-The pattern of anchoring a premise's confidence on a verified external source rather than the LLM's prior. The primary mitigation for premise-formulation errors. See [tutorial-08-grounded-reasoning.md](./tutorial-08-grounded-reasoning.md).
+The pattern of anchoring a premise's confidence on a verified external source rather than the LLM's prior. The primary mitigation for premise-formulation errors. See [tutorial-07-grounded-reasoning.md](./tutorial-07-grounded-reasoning.md).
 
 ### Revision
 
@@ -326,7 +326,7 @@ The failure mode where a flawed premise is run through the formal engine and eme
 
 ### Agentverse-backed skill
 
-A skill whose implementation is a remote agent reached through the Agentverse bridge rather than a local function. See [tutorial-07-remote-agentverse-skills.md](./tutorial-07-remote-agentverse-skills.md).
+A skill whose implementation is a remote agent reached through the Agentverse bridge rather than a local function. See [tutorial-06-remote-agentverse-skills.md](./tutorial-06-remote-agentverse-skills.md).
 
 ---
 
@@ -356,13 +356,13 @@ The hybrid design moves the failure mode — it does not eliminate it. Known iss
 
 **Garbage In, Garbage Out** applies with a twist: the formal engine does not merely pass through garbage, it **amplifies** it by lending mathematical authority to conclusions derived from flawed premises.
 
-The mitigations (external grounding, revision, action thresholds, the defense stack) are documented and non-optional for production use. See [reference-failure-modes.md](./reference-failure-modes.md) for the full catalogue and [tutorial-09-reliable-reasoning.md](./tutorial-09-reliable-reasoning.md) for strategy.
+The mitigations (external grounding, revision, action thresholds, the defense stack) are documented and non-optional for production use. See [reference-failure-modes.md](./reference-failure-modes.md) for the full catalogue and [tutorial-08-reliable-reasoning.md](./tutorial-08-reliable-reasoning.md) for strategy.
 
 ---
 
 ## Where to go next
 
-- [tutorial-01-first-run.md](./tutorial-01-first-run.md) — hands-on first session.
+- [tutorial-01-teaching-memories.md](./tutorial-01-teaching-memories.md) — hands-on first session.
 - [reference-orchestration.md](./reference-orchestration.md) — engine selection, stopping criteria, action thresholds, defense stack.
 - [reference-internals-loop.md](./reference-internals-loop.md) — turn structure in detail.
 - [reference-internals-memory-store.md](./reference-internals-memory-store.md) — the three memory tiers.

@@ -51,7 +51,7 @@ def _chat(client, model, content, max_tokens=6000, **kwargs):
             max_tokens=max_tokens,
             extra_body={
                 "enable_thinking": True,
-                "thinking_budget": 6000 
+                "thinking_budget": 6000
             },
             **kwargs
         )

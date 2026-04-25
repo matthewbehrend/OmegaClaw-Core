@@ -42,7 +42,7 @@ def getLastMessage():
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_user_id, _authenticated_chat_id
     if secret is None:
-        secret = os.environ.get("OMEGACLAW_AUTH_SECRET", "")
+        secret = os.environ.get("OMEGACLAW_OWNER_SECRET", "")
     with _state_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_user_id = None

@@ -56,7 +56,7 @@ cp .env.example .env
 nano .env
 
 # 3. Build and start
-docker compose up -d
+docker compose up -d --build
 
 # 4. Check logs
 docker compose logs -f omegaclaw

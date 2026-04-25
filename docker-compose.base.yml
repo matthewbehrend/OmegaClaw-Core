@@ -18,7 +18,7 @@ services:
       - omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
     environment:
       - LLM_PROXY_URL=http://llm-proxy:8080
-      - OMEGACLAW_OWNER_SECRET=${OMEGACLAW_OWNER_SECRET:-}
+      - OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET:-}
     command:
       - "commchannel=${COMM_CHANNEL:-irc}"
       - "provider=${PROVIDER:-Anthropic}"

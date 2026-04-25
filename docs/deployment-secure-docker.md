@@ -71,7 +71,7 @@ third-party integrations. API keys are still hidden in the proxy.
 ### Verify key isolation
 
 ```bash
-# Should show LLM_PROXY_URL and OMEGACLAW_OWNER_SECRET only — no API keys
+# Should show LLM_PROXY_URL and OMEGACLAW_AUTH_SECRET only — no API keys
 docker compose exec omegaclaw env
 
 # Double-check /proc/self/environ
@@ -191,7 +191,7 @@ add the channel's config vars to `.env`, pass them through in the compose
 
 ### Owner authentication
 
-When `OMEGACLAW_OWNER_SECRET` is set, the agent requires the owner to send
+When `OMEGACLAW_AUTH_SECRET` is set, the agent requires the owner to send
 `auth <secret>` as their first message. The first user who authenticates
 becomes the sole accepted sender. This works identically across all channels.
 
@@ -223,7 +223,7 @@ All settings are in `.env`. See `.env.example` for the full list.
 | `PROVIDER`             |          | LLM provider (default: `Anthropic`)                      |
 | `EMBEDDING_PROVIDER`   |          | `Local` or `OpenAI` (default: `Local`)                   |
 | `COMM_CHANNEL`         |          | `irc`, `telegram`, or `mattermost` (default: `irc`)      |
-| `OMEGACLAW_OWNER_SECRET` |       | Owner auth secret (`openssl rand -base64 24`)            |
+| `OMEGACLAW_AUTH_SECRET` |       | Owner auth secret (`openssl rand -base64 24`)            |
 | `IRC_CHANNEL`          |          | IRC channel name                                         |
 | `IRC_SERVER`           |          | Upstream IRC server (default: `irc.quakenet.org`)        |
 | `IRC_PORT`             |          | Upstream IRC port (default: `6667`)                      |

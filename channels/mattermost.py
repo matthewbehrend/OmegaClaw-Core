@@ -69,14 +69,15 @@ def _is_allowed_message(user_id, msg):
     candidate = _parse_auth_candidate(msg)
     with _auth_lock:
         if not _auth_secret:
-            return True
+            return "allow"
         if candidate == _auth_secret:
             if _authenticated_user_id is None:
                 _authenticated_user_id = user_id
-            return False
+                return "auth_bound"
+            return "ignore"
         if _authenticated_user_id is None:
-            return False
-        return user_id == _authenticated_user_id
+            return "ignore"
+        return "allow" if user_id == _authenticated_user_id else "ignore"
 
 def _get_display_name(user_id):
     r = requests.get(
@@ -119,9 +120,13 @@ def _ws_loop():
                 if post["channel_id"] == CHANNEL_ID and post["user_id"] != BOT_USER_ID:
                     user_id = post["user_id"]
                     message = post.get("message", "")
-                    if _is_allowed_message(user_id, message):
+                    state = _is_allowed_message(user_id, message)
+                    if state == "allow":
                         name = _get_display_name(user_id)
                         _set_last(f"{name}: {message}")
+                    elif state == "auth_bound":
+                        name = _get_display_name(user_id)
+                        send_message(f"Authentication successful for {name}.")
 
         except websocket.WebSocketTimeoutException:
             continue

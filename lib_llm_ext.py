@@ -4,6 +4,7 @@ _PROXY_ROUTES = {
     "https://api.anthropic.com/v1/":           "anthropic",
     "https://inference.asicloud.cudos.org/v1": "asi",
     "https://api.openai.com/v1":               "openai",
+    "https://api.asi1.ai/v1":                  "asione",
 }
 
 def _init_openai_client(var_name, base_url):

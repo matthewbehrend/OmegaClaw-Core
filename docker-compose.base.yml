@@ -41,6 +41,7 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - ASI_API_KEY=${ASI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ASIONE_API_KEY=${ASIONE_API_KEY:-}
       # Add API keys here; also add a location in proxy/nginx.conf.template.
       # The entrypoint auto-detects new ${VAR} references in the template.
     restart: unless-stopped

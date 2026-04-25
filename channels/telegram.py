@@ -42,7 +42,7 @@ def getLastMessage():
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_user_id, _authenticated_chat_id
     if secret is None:
-        secret = os.environ.get("OMEGACLAW_OWNER_SECRET", "")
+        secret = os.environ.pop("OMEGACLAW_OWNER_SECRET", "")
     with _state_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_user_id = None
@@ -127,26 +127,26 @@ def _is_allowed_message(chat_id, user_id, msg):
     with _state_lock:
         if not _chat_id:
             _chat_id = chat_id
-        return "allow"
-        # if _chat_id and chat_id != _chat_id:
-            # return "ignore"
 
-        # if not _auth_secret:
-            # if not _chat_id:
-                # _chat_id = chat_id
-            # return "allow"
+        if _chat_id and chat_id != _chat_id:
+            return "ignore"
 
-        # if _authenticated_user_id is None:
-            # if candidate == _auth_secret:
-                # _authenticated_user_id = user_id
-                # _authenticated_chat_id = chat_id
-                # _chat_id = chat_id
-                # return "auth_bound"
-            # return "ignore"
+        if not _auth_secret:
+            if not _chat_id:
+                _chat_id = chat_id
+            return "allow"
 
-        # if chat_id != _authenticated_chat_id:
-            # return "ignore"
-        # return "allow" if user_id == _authenticated_user_id else "ignore"
+        if _authenticated_user_id is None:
+            if candidate == _auth_secret:
+                _authenticated_user_id = user_id
+                _authenticated_chat_id = chat_id
+                _chat_id = chat_id
+                return "auth_bound"
+            return "ignore"
+
+        if chat_id != _authenticated_chat_id:
+            return "ignore"
+        return "allow" if user_id == _authenticated_user_id else "ignore"
 
 
 def _poll_loop():

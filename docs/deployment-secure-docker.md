@@ -41,7 +41,7 @@ only reach proxy services that bridge internal and external networks.
 ## Prerequisites
 
 - Docker Engine 24+ with Compose V2
-- An API key for your chosen LLM provider (Anthropic, OpenAI, or ASI Cloud)
+- An API key for your chosen LLM provider (Anthropic, OpenAI, ASI Cloud, or ASI:One)
 
 ## Quick Start (default — full network)
 
@@ -215,6 +215,7 @@ All settings are in `.env`. See `.env.example` for the full list.
 |------------------------|----------|----------------------------------------------------------|
 | `ANTHROPIC_API_KEY`    | *        | Anthropic API key (set for `provider=Anthropic`)         |
 | `ASI_API_KEY`          | *        | ASI Cloud API key (set for `provider=ASICloud`)          |
+| `ASIONE_API_KEY`       | *        | ASI:One API key (set for `provider=ASIOne`)              |
 | `OPENAI_API_KEY`       | *        | OpenAI API key (set for `provider=OpenAI`)               |
 | `PROVIDER`             |          | LLM provider (default: `Anthropic`)                      |
 | `EMBEDDING_PROVIDER`   |          | `Local` or `OpenAI` (default: `Local`)                   |
@@ -273,7 +274,7 @@ docker compose -f docker-compose.restricted.yml down -v
 
 ## Backward Compatibility
 
-The `scripts/omegaclaw` and `scripts/omegaclaw_hackathon` single-container
-deployments still work. When `LLM_PROXY_URL` is not set, `lib_llm_ext.py`
+The `scripts/omegaclaw` single-container deployment still works.
+When `LLM_PROXY_URL` is not set, `lib_llm_ext.py`
 falls back to reading API keys from environment variables (and clears them
 after reading via `os.environ.pop`).

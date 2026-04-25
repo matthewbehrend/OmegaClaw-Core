@@ -38,6 +38,8 @@ ASIONE_CLIENT = _init_openai_client(
 )
 
 def _clean(text):
+    if not text:
+        return ""
     return text.replace("_quote_", '"').replace("_apostrophe_", "'")
 
 def _chat(client, model, content, max_tokens=6000, **kwargs):
@@ -74,15 +76,17 @@ def useClaude(content):
 
 def _chatAsiOne(client, model, content, max_tokens=6000, **kwargs):
     spl = content.split(":-:-:-:")
+    messages = [{"role": "system", "content": spl[0]}]
+    if len(spl) > 1 and spl[1].strip():
+        messages.append({"role": "user", "content": spl[1]})
     try:
         resp = client.chat.completions.create(
             model=model,
-            messages=[{"role": "system", "content": spl[0]},
-                      {"role": "user", "content": spl[1]}],
+            messages=messages,
             max_tokens=max_tokens,
             extra_body={
                 "enable_thinking": True,
-                "thinking_budget": 6000 
+                "thinking_budget": 6000
             },
             **kwargs
         )

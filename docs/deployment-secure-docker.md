@@ -58,6 +58,9 @@ nano .env
 # 3. Build and start
 docker compose up -d --build
 
+# To stop:
+docker compose down
+
 # 4. Check logs
 docker compose logs -f omegaclaw
 ```

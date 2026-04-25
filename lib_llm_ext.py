@@ -98,7 +98,7 @@ def _chatAsiOne(client, model, content, max_tokens=6000, **kwargs):
 def useAsi1(content):
     resp = _chatAsiOne(
         client=ASIONE_CLIENT,
-        model="asi1",
+        model="asi1-ultra", # "asi1-ultra"
         content=content
     )
     resp = resp.replace("</arg_value>", " ").replace("</tool_call>", " ").replace("<arg_value>", " ").replace("<tool_call>", " ")

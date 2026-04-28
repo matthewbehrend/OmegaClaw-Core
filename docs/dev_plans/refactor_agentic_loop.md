@@ -384,3 +384,7 @@ The real gap: there's no concept of a "turn" or "conversation state" passed to t
                                                                                                                                                                                                     
   This directly prevents the pattern where the LLM keeps re-engaging with an old message because it can't tell it already handled it.    
   
+git notes for this branch:
+  git remote add upstream https://github.com/asi-alliance/OmegaClaw-Core.git
+  git fetch upstream
+  git rebase upstream/hackathon-2604

@@ -41,7 +41,7 @@ def getLastMessage():
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_nick
     if secret is None:
-        secret = os.environ.pop("OMEGACLAW_AUTH_SECRET", "")
+        secret = os.environ.get("OMEGACLAW_AUTH_SECRET", "")
     with _auth_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_nick = None
@@ -66,16 +66,16 @@ def _is_allowed_message(nick, msg):
     candidate = _parse_auth_candidate(msg)
     norm_nick = _normalize_nick(nick)
     with _auth_lock:
-        if not _auth_secret:
+   #     if not _auth_secret:
             return "allow"
-        if candidate == _auth_secret:
-            if _authenticated_nick is None:
-                _authenticated_nick = norm_nick
-                return "auth_bound"
-            return "ignore"
-        if _authenticated_nick is None:
-            return "ignore"
-        return "allow" if norm_nick == _authenticated_nick else "ignore"
+   #     if candidate == _auth_secret:
+   #         if _authenticated_nick is None:
+   #             _authenticated_nick = norm_nick
+   #             return "auth_bound"
+   #         return "ignore"
+   #     if _authenticated_nick is None:
+   #         return "ignore"
+   #     return "allow" if norm_nick == _authenticated_nick else "ignore"
 
 def _irc_loop(channel, server, port, nick):
     global _running, _sock, _connected

@@ -21,8 +21,7 @@ __pycache__/
 
 # Container metadata
 Dockerfile
-docker-compose*.yml
-proxy/
+docker-compose.yml
 
 # Docs and license (not required at runtime)
 README.md

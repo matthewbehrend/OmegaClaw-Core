@@ -98,11 +98,7 @@ docker compose exec omegaclaw id
 docker compose exec omegaclaw env
 # Expected: LLM_PROXY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET, no tokens
 
-# 3. No Docker secrets mounted in agent
-docker compose exec omegaclaw ls /run/secrets/ 2>&1
-# Expected: No such file or directory
-
-# 4. Proxy auth endpoints work
+# 3. Proxy auth endpoints work
 docker compose exec omegaclaw python3 -c \
   "import urllib.request; print(urllib.request.urlopen('http://llm-proxy:8080/auth/status').read().decode())"
 # Expected: {"enabled":true}  (when OMEGACLAW_AUTH_SECRET is set)
@@ -114,7 +110,7 @@ r.add_header('X-Auth-Token', 'wrong')
 print(urllib.request.urlopen(r).read().decode())"
 # Expected: {"match":false}
 
-# 5. Bot tokens and auth secret in proxy only
+# 4. Bot tokens and auth secret in proxy only
 docker compose exec llm-proxy env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
 docker compose exec omegaclaw env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
 # First command shows tokens and secret; second shows nothing.

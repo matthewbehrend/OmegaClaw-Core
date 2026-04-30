@@ -152,7 +152,7 @@ def _ws_loop():
     ws.close()
     _connected = False
 
-def start_mattermost(MM_URL_, CHANNEL_ID_, BOT_TOKEN_):
+def start_mattermost(MM_URL_, CHANNEL_ID_):
     global _running, MM_URL, CHANNEL_ID, BOT_TOKEN, _headers, _connected, _use_proxy
     global _auth_enabled, _proxy_url
     import os
@@ -170,8 +170,8 @@ def start_mattermost(MM_URL_, CHANNEL_ID_, BOT_TOKEN_):
             _auth_enabled = False
     else:
         MM_URL = MM_URL_
-        BOT_TOKEN = BOT_TOKEN_
-        _headers = {"Authorization": f"Bearer {BOT_TOKEN}"}
+        BOT_TOKEN = os.environ.get("MM_BOT_TOKEN", "").strip()
+        _headers = {"Authorization": f"Bearer {BOT_TOKEN}"} if BOT_TOKEN else {}
         _use_proxy = False
         _auth_enabled = False
     CHANNEL_ID = CHANNEL_ID_

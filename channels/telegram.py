@@ -208,7 +208,7 @@ def _poll_loop():
     print("[TELEGRAM] Polling stopped")
 
 
-def start_telegram(bot_token, chat_id="", poll_timeout=20):
+def start_telegram(chat_id="", poll_timeout=20):
     global _running, _bot_token, _api_base, _chat_id, _poll_timeout, _offset, _connected
     global _auth_enabled, _proxy_url
 
@@ -224,7 +224,7 @@ def start_telegram(bot_token, chat_id="", poll_timeout=20):
         except Exception:
             _auth_enabled = False
     else:
-        _bot_token = str(bot_token).strip()
+        _bot_token = os.environ.get("TG_BOT_TOKEN", "").strip()
         if not _bot_token:
             raise ValueError("TG_BOT_TOKEN is required")
         _api_base = f"https://api.telegram.org/bot{_bot_token}"

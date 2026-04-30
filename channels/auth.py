@@ -44,7 +44,3 @@ def verify_token(candidate):
             return data.get("match", False)
     except Exception:
         return False
-
-
-def pop_auth_secret():
-    return ""

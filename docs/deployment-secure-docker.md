@@ -1,7 +1,9 @@
-# Secure Docker Compose Deployment
+# Secure Docker Deployment
 
 This guide deploys OmegaClaw with a reverse proxy that hides API keys from
-the agent container. An optional restricted mode adds full network isolation.
+the agent container. Two deployment paths are available: `docker compose`
+(recommended for persistent deployments) and `scripts/omegaclaw` (interactive,
+for evaluation). An optional restricted mode adds full network isolation.
 
 ## Architecture
 
@@ -12,7 +14,7 @@ the agent container. An optional restricted mode adds full network isolation.
 │  ┌───────────┐              ┌──────────────┐  HTTPS          │
 │  │ irc-proxy │  TCP         │  llm-proxy   │──TLS────────▸   │
 │  │ (socat)   │──────────▸   │  (nginx)     │  LLM + other    │
-│  └─────┬─────┘              └──────┬───────┘  APIs            │
+│  └─────┬─────┘              └──────┬───────┘  APIs           │
 └────────┼───────────────────────────┼─────────────────────────┘
 ┌────────┼───────────────────────────┼─────────────────────────┐
 │        │    internal network       │                         │
@@ -30,9 +32,12 @@ The agent sends requests to `http://llm-proxy:8080/<path>` without
 credentials. The proxy injects the real key and forwards over TLS. The
 agent process never sees API keys.
 
-**Layer 2 — Environment variable clearing.** As defense in depth, Python
-channel code uses `os.environ.pop()` to read the owner secret once and
-immediately remove it from the process environment.
+**Layer 2 — Environment variable clearing.** As defense in depth,
+`channels/auth.py` uses `os.environ.pop()` to read the owner secret once
+during channel initialization and immediately remove it from the process
+environment. API keys are similarly popped in `lib_llm_ext.py` at import
+time. The agent process cannot read these values from `os.environ` after
+startup.
 
 **Layer 3 — Network isolation (restricted mode only).** The agent container
 sits on a Docker internal network with no route to the internet. It can
@@ -71,11 +76,14 @@ third-party integrations. API keys are still hidden in the proxy.
 ### Verify key isolation
 
 ```bash
-# Should show LLM_PROXY_URL and OMEGACLAW_AUTH_SECRET only — no API keys
+# Should show LLM_PROXY_URL and OMEGACLAW_AUTH_SECRET in the container env,
+# but no API keys. Note: OMEGACLAW_AUTH_SECRET is popped from os.environ at
+# runtime, so it won't appear in Python's os.environ after startup.
 docker compose exec omegaclaw env
 
-# Double-check /proc/self/environ
-docker compose exec omegaclaw sh -c "cat /proc/self/environ | tr '\0' '\n' | sort"
+# Verify the auth secret was cleared from the Python process:
+docker compose exec omegaclaw \
+  python3 -c "import os; print(os.environ.get('OMEGACLAW_AUTH_SECRET', 'CLEARED'))"
 ```
 
 ## Restricted Mode (no direct internet)
@@ -191,9 +199,16 @@ add the channel's config vars to `.env`, pass them through in the compose
 
 ### Owner authentication
 
-When `OMEGACLAW_AUTH_SECRET` is set, the agent requires the owner to send
-`auth <secret>` as their first message. The first user who authenticates
-becomes the sole accepted sender. This works identically across all channels.
+When `OMEGACLAW_AUTH_SECRET` is set to a non-empty value, the agent
+requires the owner to send `auth <secret>` as their first message. The
+first user who authenticates becomes the sole accepted sender — all
+subsequent messages from other users are silently ignored. This works
+identically across all channels (IRC, Telegram, Mattermost).
+
+If `OMEGACLAW_AUTH_SECRET` is left empty or unset, owner authentication
+is disabled and **any user on the channel can interact with the agent**.
+This is suitable for private channels but should not be used on public
+channels or shared servers.
 
 ## Feature Availability by Mode
 
@@ -247,6 +262,18 @@ To route a new external API through the proxy (hiding its key from the agent):
 The proxy entrypoint auto-detects `${VAR}` references in the nginx
 template, so no changes to `proxy/entrypoint.sh` are needed.
 
+## Read-Only Runtime
+
+The agent container runs as UID 65534 (nobody) with a read-only filesystem.
+Writable locations are limited to:
+
+- `omegaclaw-memory` volume (mounted at the memory directory)
+- `/tmp`, `/run`, `/var/tmp` (tmpfs mounts, ephemeral)
+
+All other paths (`/PeTTa`, the MeTTa runtime, agent source code) are
+root-owned and read-only. This is intentional — it prevents the agent from
+modifying its own code or runtime at the filesystem level.
+
 ## Known Limitations
 
 1. **OpenAI provider**: The `useGPT` function in PeTTa's `lib_llm` reads
@@ -275,9 +302,15 @@ docker compose -f docker-compose.restricted.yml down
 docker compose -f docker-compose.restricted.yml down -v
 ```
 
-## Backward Compatibility
+## Alternative: Interactive Script
 
-The `scripts/omegaclaw` single-container deployment still works.
-When `LLM_PROXY_URL` is not set, `lib_llm_ext.py`
-falls back to reading API keys from environment variables (and clears them
-after reading via `os.environ.pop`).
+The `scripts/omegaclaw` interactive setup script provides a guided
+deployment path. When run from within the repository, it automatically
+builds and starts the LLM proxy alongside the agent container, providing
+the same API key isolation as docker-compose. If the `proxy/` directory
+is not found (e.g., the script is distributed standalone), it falls back
+to passing the API key directly to the agent with a warning.
+
+For persistent deployments, use `docker compose up -d --build`. The script
+is best suited for quick evaluation and one-off runs — containers are
+cleaned up automatically on exit.

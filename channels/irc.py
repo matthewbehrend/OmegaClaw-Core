@@ -1,4 +1,3 @@
-import os
 import random
 import socket
 import threading
@@ -40,8 +39,6 @@ def getLastMessage():
 
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_nick
-    if secret is None:
-        secret = os.environ.pop("OMEGACLAW_AUTH_SECRET", "")
     with _auth_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_nick = None
@@ -66,7 +63,7 @@ def _is_allowed_message(nick, msg):
     candidate = _parse_auth_candidate(msg)
     norm_nick = _normalize_nick(nick)
     with _auth_lock:
-        if not _auth_secret:
+        if not _auth_secret:  # no secret configured — open to all users
             return "allow"
         if candidate == _auth_secret:
             if _authenticated_nick is None:

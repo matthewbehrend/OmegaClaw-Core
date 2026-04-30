@@ -1,7 +1,7 @@
 import os, openai
 
 _PROXY_ROUTES = {
-    "https://api.anthropic.com/v1/":           "anthropic",
+    "https://api.anthropic.com/v1":            "anthropic",
     "https://inference.asicloud.cudos.org/v1": "asi",
     "https://api.openai.com/v1":               "openai",
     "https://api.asi1.ai/v1":                  "asione",
@@ -10,7 +10,7 @@ _PROXY_ROUTES = {
 def _init_openai_client(var_name, base_url):
     proxy_url = os.environ.get("LLM_PROXY_URL")
     if proxy_url:
-        prefix = _PROXY_ROUTES.get(base_url)
+        prefix = _PROXY_ROUTES.get(base_url.rstrip("/"))
         if prefix is None:
             return None
         return openai.OpenAI(
@@ -98,7 +98,7 @@ def _chatAsiOne(client, model, content, max_tokens=6000, **kwargs):
 def useAsi1(content):
     resp = _chatAsiOne(
         client=ASIONE_CLIENT,
-        model="asi1-ultra", # "asi1-ultra"
+        model="asi1", # "asi1-ultra"
         content=content
     )
     resp = resp.replace("</arg_value>", " ").replace("</tool_call>", " ").replace("<arg_value>", " ").replace("<tool_call>", " ")

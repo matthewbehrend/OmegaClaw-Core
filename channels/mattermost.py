@@ -1,5 +1,4 @@
 import json
-import os
 import threading
 import time
 
@@ -47,8 +46,6 @@ def getLastMessage():
 
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_user_id
-    if secret is None:
-        secret = os.environ.pop("OMEGACLAW_AUTH_SECRET", "")
     with _auth_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_user_id = None
@@ -68,7 +65,7 @@ def _is_allowed_message(user_id, msg):
     global _authenticated_user_id
     candidate = _parse_auth_candidate(msg)
     with _auth_lock:
-        if not _auth_secret:
+        if not _auth_secret:  # no secret configured — open to all users
             return "allow"
         if candidate == _auth_secret:
             if _authenticated_user_id is None:

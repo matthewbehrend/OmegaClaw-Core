@@ -1,5 +1,4 @@
 import json
-import os
 import threading
 import time
 import urllib.parse
@@ -41,8 +40,6 @@ def getLastMessage():
 
 def _set_auth_secret(secret=None):
     global _auth_secret, _authenticated_user_id, _authenticated_chat_id
-    if secret is None:
-        secret = os.environ.pop("OMEGACLAW_AUTH_SECRET", "")
     with _state_lock:
         _auth_secret = (secret or "").strip()
         _authenticated_user_id = None
@@ -131,9 +128,7 @@ def _is_allowed_message(chat_id, user_id, msg):
         if _chat_id and chat_id != _chat_id:
             return "ignore"
 
-        if not _auth_secret:
-            if not _chat_id:
-                _chat_id = chat_id
+        if not _auth_secret:  # no secret configured — open to all users
             return "allow"
 
         if _authenticated_user_id is None:

@@ -10,7 +10,17 @@ image="${1:?usage: $0 <container-image>}"
 # Create temporary files
 tmp_config_file="$(mktemp)"
 tmp_py_file="$(mktemp)"
-trap 'rm -f "$tmp_config_file" "$tmp_py_file"' EXIT
+use_proxy=false
+
+cleanup() {
+  rm -f "$tmp_config_file" "$tmp_py_file"
+  docker rm -f omegaclaw 2>/dev/null || true
+  if [ "$use_proxy" = true ]; then
+    docker rm -f omegaclaw-proxy 2>/dev/null || true
+    docker network rm omegaclaw-net 2>/dev/null || true
+  fi
+}
+trap cleanup EXIT INT TERM
 
 # Lock down permissions immediately after creation
 chmod 0600 "$tmp_config_file"
@@ -210,10 +220,14 @@ cat <<EOF
 ============================================
 
 Stop OmegaClaw:
-  docker stop omegaclaw
+  docker stop omegaclaw  (proxy auto-cleans up)
 
 Restart OmegaClaw:
   --> Simply rerun this script
+
+For persistent deployments, use docker compose instead:
+  docker compose up -d --build
+  docker compose down
 
 Examine log file in case of problem:
   docker logs -f omegaclaw
@@ -263,6 +277,37 @@ fi
 
 docker rm -f omegaclaw 2>/dev/null || true
 
+# ---- Proxy setup (if proxy/ directory is available) ----
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+repo_root="$(cd "$script_dir/.." && pwd)"
+proxy_dir="${repo_root}/proxy"
+
+if [ -f "${proxy_dir}/Dockerfile" ]; then
+  use_proxy=true
+  proxy_image="omegaclaw-proxy:latest"
+  echo "Building LLM proxy image..."
+  docker build -q -t "$proxy_image" "$proxy_dir"
+  docker network create omegaclaw-net 2>/dev/null || true
+  docker rm -f omegaclaw-proxy 2>/dev/null || true
+  docker run -d \
+    --name omegaclaw-proxy \
+    --network omegaclaw-net \
+    --restart unless-stopped \
+    -e "${api_token_var}=${api_token}" \
+    "$proxy_image" >/dev/null
+  echo "Waiting for proxy..."
+  for i in $(seq 1 10); do
+    if docker exec omegaclaw-proxy wget -qO- http://localhost:8080/health 2>/dev/null; then
+      break
+    fi
+    sleep 1
+  done
+  echo "LLM proxy ready. API key isolated from agent container."
+else
+  echo "WARNING: proxy/ not found. Running without API key isolation." >&2
+fi
+
+# ---- Start agent container ----
 docker_cmd=(
   docker run -d -it
   --name omegaclaw
@@ -273,7 +318,18 @@ docker_cmd=(
   --tmpfs /tmp:size=64m,mode=1777
   --tmpfs /run:size=16m,mode=755
   --tmpfs /var/tmp:size=64m,mode=1777
-  -e "${api_token_var}=${api_token}"
+)
+
+if [ "$use_proxy" = true ]; then
+  docker_cmd+=(
+    --network omegaclaw-net
+    -e "LLM_PROXY_URL=http://omegaclaw-proxy:8080"
+  )
+else
+  docker_cmd+=(-e "${api_token_var}=${api_token}")
+fi
+
+docker_cmd+=(
   -e "OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET}"
   "$image"
   "commchannel=${commchannel}"

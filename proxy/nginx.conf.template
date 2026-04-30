@@ -24,6 +24,9 @@ http {
     server {
         listen 8080;
 
+        # Uses Anthropic's OpenAI-compatible endpoint (/v1/chat/completions),
+        # which accepts Bearer auth like OpenAI. The native /v1/messages API
+        # uses x-api-key, but the openai Python client targets the compat endpoint.
         location /anthropic/ {
             proxy_pass https://api.anthropic.com/v1/;
             proxy_set_header Authorization "Bearer ${ANTHROPIC_API_KEY}";

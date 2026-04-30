@@ -1,9 +1,7 @@
 # Secure Docker Deployment
 
 This guide deploys OmegaClaw with a reverse proxy that hides API keys from
-the agent container. Two deployment paths are available: `docker compose`
-(recommended for persistent deployments) and `scripts/omegaclaw` (interactive,
-for evaluation). An optional restricted mode adds full network isolation.
+the agent container. An optional restricted mode adds full network isolation.
 
 ## Architecture
 
@@ -334,15 +332,3 @@ docker compose -f docker-compose.restricted.yml down
 docker compose -f docker-compose.restricted.yml down -v
 ```
 
-## Alternative: Interactive Script
-
-The `scripts/omegaclaw` interactive setup script provides a guided
-deployment path. When run from within the repository, it automatically
-builds and starts the gateway alongside the agent container, providing
-the same API key isolation as docker-compose. If the `proxy/` directory
-is not found (e.g., the script is distributed standalone), it falls back
-to passing the API key directly to the agent with a warning.
-
-For persistent deployments, use `docker compose up -d --build`. The script
-is best suited for quick evaluation and one-off runs — containers are
-cleaned up automatically on exit.

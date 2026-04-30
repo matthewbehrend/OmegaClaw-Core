@@ -54,20 +54,20 @@ OmegaClaw is a persistent AI agent written in MeTTa — SingularityNET's AGI pro
 
 ### Steps
 
-**1. Run the launch script:**
+**1. Clone and configure:**
 
 ```shell
-docker pull singularitynet/omegaclaw:hackathon2604
-curl -fsSL https://raw.githubusercontent.com/asi-alliance/OmegaClaw-Core/refs/tags/hackathon2604/scripts/omegaclaw | bash -s -- singularitynet/omegaclaw:hackathon2604
+git clone https://github.com/asi-alliance/OmegaClaw-Core.git
+cd OmegaClaw-Core
+cp .env.example .env
+# Edit .env — set your API key, channel config, and (optionally) an owner auth secret
 ```
 
-**2. Proceed through the start-up script:  
-   1) Read the disclaimer \- understand the risks of running an agent and take appropriate precautions; to proceed, type ‘accept’  
-   2) Choose 1\) IRC or 2\) Telegram  
-      1) For IRC, enter your unique private channel ID  
-      2) For Telegram enter your bot token  
-   3) Select desired LLM to use  
-   4) Enter your API key
+**2. Build and start:**
+
+```shell
+docker compose up -d --build
+```
 
 **3. Join your preferred channel:**
 
@@ -216,10 +216,12 @@ Make any desired changes, then build your own Docker image:
 docker build -t <your-image-name> .
 ```
 
-Run with the startup script and continue from Option 1, step 3:
+Then start with docker compose and continue from Option 1, step 3:
 
 ```shell
-./scripts/omegaclaw <your-image-name>
+cp .env.example .env
+# Edit .env — set your API key and channel config
+docker compose up -d --build
 ```
 
 ---
@@ -269,9 +271,10 @@ python3 -m pip install -r ./repos/OmegaClaw-Core/requirements.txt
 
 ## Reference — Configuration Options
 
-Defaults are recommended for smooth operation. To customize, add parameters inside the startup script after `IRC_channel="$IRC_channel"`. Don't forget to add a continuation backslash `\`.
+Defaults are recommended for smooth operation. To customize, pass parameters
+via the `command` section in `docker-compose.base.yml` or via `.env`.
 
-> The startup script is located at `scripts/omegaclaw`.
+> See `docs/deployment_secure_docker.md` for the full configuration reference.
 
 ### General
 

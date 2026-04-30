@@ -117,5 +117,5 @@ RUN cp ${OMEGACLAW_DIR}/run.metta /PeTTa/run.metta \
 
 USER 65534:65534
 
-ENTRYPOINT ["sh", "run.sh", "run.metta"]
+ENTRYPOINT ["sh", "repos/OmegaClaw-Core/entrypoint.sh", "run.metta"]
 CMD []

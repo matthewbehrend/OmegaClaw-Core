@@ -32,14 +32,22 @@ The agent sends requests to `http://llm-proxy:8080/<path>` without
 credentials. The proxy injects the real key and forwards over TLS. The
 agent process never sees API keys.
 
-**Layer 2 — Environment variable clearing.** As defense in depth,
-`channels/auth.py` uses `os.environ.pop()` to read the owner secret once
-during channel initialization and immediately remove it from the process
-environment. API keys are similarly popped in `lib_llm_ext.py` at import
-time. The agent process cannot read these values from `os.environ` after
-startup.
+**Layer 2 — File-based Docker secrets.** Channel tokens and the owner
+auth secret are delivered as files under `/run/secrets/` using Docker
+Compose's `secrets:` directive. They never appear in environment variables
+or CLI arguments, so the agent cannot discover them via `env`,
+`/proc/1/environ`, or `/proc/1/cmdline`. Python `os.environ.pop()` alone
+is inadequate because the original values would persist in
+`/proc/1/environ` and `/proc/1/cmdline`.
 
-**Layer 3 — Network isolation (restricted mode only).** The agent container
+**Layer 3 — Entrypoint environment scrubbing (defense in depth).** A
+wrapper entrypoint (`entrypoint.sh`) uses `exec env -i` to replace
+itself with a clean environment containing only allowlisted, non-secret
+variables. Since secrets are delivered as files (Layer 2) and never as
+env vars, this layer guards against accidental env var leaks from
+compose overrides or future configuration changes.
+
+**Layer 4 — Network isolation (restricted mode only).** The agent container
 sits on a Docker internal network with no route to the internet. It can
 only reach proxy services that bridge internal and external networks.
 
@@ -76,17 +84,20 @@ docker compose down -v --remove-orphans --rmi all
 The agent has full outbound internet access for web search, RAG, and
 third-party integrations. API keys are still hidden in the proxy.
 
-### Verify key isolation
+### Verify secret isolation
 
 ```bash
-# Should show LLM_PROXY_URL and OMEGACLAW_AUTH_SECRET in the container env,
-# but no API keys. Note: OMEGACLAW_AUTH_SECRET is popped from os.environ at
-# runtime, so it won't appear in Python's os.environ after startup.
+# Should show only LLM_PROXY_URL, PATH, HOME, etc. — no secrets.
 docker compose exec omegaclaw env
 
-# Verify the auth secret was cleared from the Python process:
-docker compose exec omegaclaw \
-  python3 -c "import os; print(os.environ.get('OMEGACLAW_AUTH_SECRET', 'CLEARED'))"
+# Verify /proc/1/environ is clean (no secrets in original process env):
+docker compose exec omegaclaw sh -c "cat /proc/1/environ | tr '\0' '\n'"
+
+# Verify /proc/1/cmdline has no tokens:
+docker compose exec omegaclaw sh -c "cat /proc/1/cmdline | tr '\0' '\n'"
+
+# Secrets are delivered as files (expected — agent holds these in memory anyway):
+docker compose exec omegaclaw ls /run/secrets/
 ```
 
 ## Restricted Mode (no direct internet)
@@ -271,7 +282,8 @@ The agent container runs as UID 65534 (nobody) with a read-only filesystem.
 Writable locations are limited to:
 
 - `omegaclaw-memory` volume (mounted at the memory directory)
-- `/tmp`, `/run`, `/var/tmp` (tmpfs mounts, ephemeral)
+- `/tmp`, `/var/tmp` (tmpfs mounts, ephemeral)
+- `/run/secrets` (Docker Compose secrets mount, read-only)
 
 All other paths (`/PeTTa`, the MeTTa runtime, agent source code) are
 root-owned and read-only. This is intentional — it prevents the agent from
@@ -279,16 +291,23 @@ modifying its own code or runtime at the filesystem level.
 
 ## Known Limitations
 
-1. **OpenAI provider**: The `useGPT` function in PeTTa's `lib_llm` reads
+1. **Secret files persist in `/run/secrets/`.** Docker Compose mounts
+   secret files as root-owned, read-only. The agent (UID 65534) can read
+   but not delete them. This is acceptable because the agent already holds
+   these tokens in Python memory — the files do not expand the attack
+   surface. The security win is eliminating secrets from `/proc/1/environ`
+   and `/proc/1/cmdline`, which are harder to defend.
+
+2. **OpenAI provider**: The `useGPT` function in PeTTa's `lib_llm` reads
    `OPENAI_API_KEY` directly. The proxy cannot intercept this. In default
    mode this works naturally. In restricted mode, add `OPENAI_API_KEY` to
    the agent's environment in a compose override.
 
-2. **Mattermost WebSocket**: Mattermost uses HTTPS and WSS. In default mode
+3. **Mattermost WebSocket**: Mattermost uses HTTPS and WSS. In default mode
    this works directly. In restricted mode, add a proxy entry for your
    Mattermost server.
 
-3. **`git-import!` at startup**: `run.metta` calls `git-import!` for repos
+4. **`git-import!` at startup**: `run.metta` calls `git-import!` for repos
    present in the Docker image. PeTTa skips cloning when the directory
    exists. If it attempts a `git fetch`, this fails harmlessly in restricted
    mode.

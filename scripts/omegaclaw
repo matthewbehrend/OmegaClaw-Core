@@ -10,10 +10,12 @@ image="${1:?usage: $0 <container-image>}"
 # Create temporary files
 tmp_config_file="$(mktemp)"
 tmp_py_file="$(mktemp)"
+secrets_dir="$(mktemp -d)"
 use_proxy=false
 
 cleanup() {
   rm -f "$tmp_config_file" "$tmp_py_file"
+  rm -rf "$secrets_dir"
   docker rm -f omegaclaw 2>/dev/null || true
   if [ "$use_proxy" = true ]; then
     docker rm -f omegaclaw-proxy 2>/dev/null || true
@@ -25,6 +27,7 @@ trap cleanup EXIT INT TERM
 # Lock down permissions immediately after creation
 chmod 0600 "$tmp_config_file"
 chmod 0600 "$tmp_py_file"
+chmod 0700 "$secrets_dir"
 
 cat >"$tmp_py_file" <<'PY'
 import getpass
@@ -277,6 +280,16 @@ fi
 
 docker rm -f omegaclaw 2>/dev/null || true
 
+# ---- Write secrets as files (never passed as env vars or CLI args) ----
+printf '%s' "$OMEGACLAW_AUTH_SECRET" > "$secrets_dir/omegaclaw_auth_secret"
+if [ -n "${TG_BOT_TOKEN:-}" ]; then
+  printf '%s' "$TG_BOT_TOKEN" > "$secrets_dir/tg_bot_token"
+fi
+if [ -n "${MM_BOT_TOKEN:-}" ]; then
+  printf '%s' "$MM_BOT_TOKEN" > "$secrets_dir/mm_bot_token"
+fi
+chmod 0444 "$secrets_dir"/*
+
 # ---- Proxy setup (if proxy/ directory is available) ----
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -315,8 +328,8 @@ docker_cmd=(
   --user 65534:65534
   --security-opt no-new-privileges:true
   --volume omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
+  --volume "${secrets_dir}:/run/secrets:ro"
   --tmpfs /tmp:size=64m,mode=1777
-  --tmpfs /run:size=16m,mode=755
   --tmpfs /var/tmp:size=64m,mode=1777
 )
 
@@ -330,7 +343,6 @@ else
 fi
 
 docker_cmd+=(
-  -e "OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET}"
   "$image"
   "commchannel=${commchannel}"
   "provider=${provider}"
@@ -339,8 +351,7 @@ docker_cmd+=(
 
 if [ "${commchannel}" = "irc" ]; then
   docker_cmd+=("IRC_channel=${IRC_channel}")
-else
-  docker_cmd+=("TG_BOT_TOKEN=${TG_BOT_TOKEN}")
+elif [ "${commchannel}" = "telegram" ]; then
   docker_cmd+=("TG_POLL_TIMEOUT=${TG_POLL_TIMEOUT:-20}")
 fi
 

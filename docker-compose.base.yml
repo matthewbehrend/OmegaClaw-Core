@@ -10,15 +10,19 @@ services:
     security_opt:
       - no-new-privileges:true
     init: true
+    # DO NOT add /run to tmpfs — it overwrites Docker Compose secrets
+    # mounted at /run/secrets/.  Nothing in this container uses /run.
     tmpfs:
       - /tmp:size=64m,mode=1777
-      - /run:size=16m,mode=755
       - /var/tmp:size=64m,mode=1777
     volumes:
       - omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
+    secrets:
+      - omegaclaw_auth_secret
+      - tg_bot_token
+      - mm_bot_token
     environment:
       - LLM_PROXY_URL=http://llm-proxy:8080
-      - OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET:-}
     command:
       - "commchannel=${COMM_CHANNEL:-irc}"
       - "provider=${PROVIDER:-Anthropic}"
@@ -26,11 +30,9 @@ services:
       - "IRC_channel=${IRC_CHANNEL:-}"
       - "IRC_server=${IRC_SERVER:-irc.quakenet.org}"
       - "IRC_port=${IRC_PORT:-6667}"
-      - "TG_BOT_TOKEN=${TG_BOT_TOKEN:-}"
       - "TG_POLL_TIMEOUT=${TG_POLL_TIMEOUT:-20}"
       - "MM_URL=${MM_URL:-}"
       - "MM_CHANNEL_ID=${MM_CHANNEL_ID:-}"
-      - "MM_BOT_TOKEN=${MM_BOT_TOKEN:-}"
     restart: unless-stopped
 
   llm-proxy-base:
@@ -45,6 +47,14 @@ services:
       # Add API keys here; also add a location in proxy/nginx.conf.template.
       # The entrypoint auto-detects new ${VAR} references in the template.
     restart: unless-stopped
+
+secrets:
+  omegaclaw_auth_secret:
+    environment: OMEGACLAW_AUTH_SECRET
+  tg_bot_token:
+    environment: TG_BOT_TOKEN
+  mm_bot_token:
+    environment: MM_BOT_TOKEN
 
 volumes:
   omegaclaw-memory:

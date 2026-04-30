@@ -66,8 +66,11 @@ docker compose up -d --build
 # To stop:
 docker compose down
 
-# 4. Check logs
+# 4. Monitor logs
 docker compose logs -f omegaclaw
+
+# 5. Nuke volumes (agent memory) and full cleanup if needed:
+docker compose down -v --remove-orphans --rmi all
 ```
 
 The agent has full outbound internet access for web search, RAG, and

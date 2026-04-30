@@ -9,17 +9,11 @@ services:
     security_opt:
       - no-new-privileges:true
     init: true
-    # DO NOT add /run to tmpfs — it would overwrite Docker secrets at /run/secrets/.
     tmpfs:
       - /tmp:size=64m,mode=1777
       - /var/tmp:size=64m,mode=1777
     volumes:
       - omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
-    secrets:
-      - source: omegaclaw_auth_secret
-        uid: "0"
-        gid: "0"
-        mode: 0400
     environment:
       - LLM_PROXY_URL=http://llm-proxy:8080
     command:
@@ -46,13 +40,10 @@ services:
       - TG_BOT_TOKEN=${TG_BOT_TOKEN:-}
       - MM_BOT_TOKEN=${MM_BOT_TOKEN:-}
       - MM_UPSTREAM_URL=${MM_URL:-https://chat.singularitynet.io}
+      - OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET:-}
       # Add API keys here; also add a location in proxy/nginx.conf.template.
       # The entrypoint auto-detects new ${VAR} references in the template.
     restart: unless-stopped
 
 volumes:
   omegaclaw-memory:
-
-secrets:
-  omegaclaw_auth_secret:
-    environment: OMEGACLAW_AUTH_SECRET

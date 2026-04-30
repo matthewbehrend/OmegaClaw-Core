@@ -1,6 +1,7 @@
 import json
 import threading
 import time
+import urllib.request
 
 import requests
 import websocket
@@ -12,9 +13,10 @@ _last_message = ""
 _msg_lock = threading.Lock()
 _connected = False
 _auth_lock = threading.Lock()
-_auth_secret = ""
+_auth_enabled = False
 _authenticated_user_id = None
 _use_proxy = False
+_proxy_url = ""
 
 # ---- Mattermost config (dummy token ok) ----
 MM_URL = "https://chat.singularitynet.io"
@@ -45,11 +47,22 @@ def getLastMessage():
         return tmp
 
 
-def _set_auth_secret(secret=None):
-    global _auth_secret, _authenticated_user_id
-    with _auth_lock:
-        _auth_secret = (secret or "").strip()
-        _authenticated_user_id = None
+def _verify_token(candidate):
+    if not _proxy_url:
+        return True
+    url = f"{_proxy_url}/auth/verify"
+    req = urllib.request.Request(url)
+    req.add_header("X-Auth-Token", str(candidate))
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read()).get("match", False)
+    except Exception:
+        return False
+
+
+def _is_auth_command(msg):
+    lower = msg.strip().lower()
+    return lower.startswith("auth ") or lower.startswith("/auth ")
 
 
 def _parse_auth_candidate(msg):
@@ -64,18 +77,18 @@ def _parse_auth_candidate(msg):
 
 def _is_allowed_message(user_id, msg):
     global _authenticated_user_id
-    candidate = _parse_auth_candidate(msg)
     with _auth_lock:
-        if not _auth_secret:  # no secret configured — open to all users
+        if not _auth_enabled:
             return "allow"
-        if candidate == _auth_secret:
-            if _authenticated_user_id is None:
-                _authenticated_user_id = user_id
-                return "auth_bound"
+        if _authenticated_user_id is not None:
+            return "allow" if user_id == _authenticated_user_id else "ignore"
+        if not _is_auth_command(msg):
             return "ignore"
-        if _authenticated_user_id is None:
-            return "ignore"
-        return "allow" if user_id == _authenticated_user_id else "ignore"
+        candidate = _parse_auth_candidate(msg)
+        if _verify_token(candidate):
+            _authenticated_user_id = user_id
+            return "auth_bound"
+        return "ignore"
 
 def _get_display_name(user_id):
     r = requests.get(
@@ -139,24 +152,31 @@ def _ws_loop():
     ws.close()
     _connected = False
 
-def start_mattermost(MM_URL_, CHANNEL_ID_, BOT_TOKEN_, auth_secret=None):
+def start_mattermost(MM_URL_, CHANNEL_ID_, BOT_TOKEN_):
     global _running, MM_URL, CHANNEL_ID, BOT_TOKEN, _headers, _connected, _use_proxy
+    global _auth_enabled, _proxy_url
     import os
-    proxy_url = os.environ.get("LLM_PROXY_URL")
-    if proxy_url:
-        MM_URL = f"{proxy_url.rstrip('/')}/mattermost"
+    proxy = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    _proxy_url = proxy
+    if proxy:
+        MM_URL = f"{proxy}/mattermost"
         BOT_TOKEN = "proxy"
         _headers = {}
         _use_proxy = True
+        try:
+            with urllib.request.urlopen(f"{proxy}/auth/status", timeout=5) as resp:
+                _auth_enabled = json.loads(resp.read()).get("enabled", False)
+        except Exception:
+            _auth_enabled = False
     else:
         MM_URL = MM_URL_
         BOT_TOKEN = BOT_TOKEN_
         _headers = {"Authorization": f"Bearer {BOT_TOKEN}"}
         _use_proxy = False
+        _auth_enabled = False
     CHANNEL_ID = CHANNEL_ID_
     _running = True
     _connected = False
-    _set_auth_secret(auth_secret)
     t = threading.Thread(target=_ws_loop, daemon=True)
     t.start()
     return t

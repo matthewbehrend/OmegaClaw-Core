@@ -27,31 +27,28 @@ for evaluation). An optional restricted mode adds full network isolation.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Layer 1 — Reverse proxy.** An nginx reverse proxy holds all API keys
-**and channel tokens** (Telegram bot token, Mattermost bot token). The
-agent sends requests to `http://llm-proxy:8080/<path>` without
-credentials. The proxy injects the real key or token and forwards over
-TLS. For Telegram, the proxy rewrites the URL to embed the bot token in
-the path. For Mattermost, it injects the Bearer Authorization header.
-The agent process never sees any API key or channel token.
+**Layer 1 — Reverse proxy.** An nginx reverse proxy holds all API keys,
+**channel tokens** (Telegram bot token, Mattermost bot token), **and the
+owner auth secret**. The agent sends requests to
+`http://llm-proxy:8080/<path>` without credentials. The proxy injects
+the real key or token and forwards over TLS. For Telegram, the proxy
+rewrites the URL to embed the bot token in the path. For Mattermost, it
+injects the Bearer Authorization header. The agent process never sees
+any API key, channel token, or auth secret.
 
-**Layer 2 — Root-owned Docker secret + ephemeral handoff.** The owner
-auth secret is delivered as a Docker Compose secret file at
-`/run/secrets/omegaclaw_auth_secret`, owned by root with mode 0400.
-The entrypoint (running as root) reads this file, writes the value to
-`/tmp/.auth_secret` (owned by UID 65534, mode 0400), then drops
-privileges to UID 65534 via `setpriv`. Python reads and immediately
-deletes `/tmp/.auth_secret` at startup. The secret never appears as a
-Docker environment variable, so `docker exec env` and `docker inspect`
-are both clean.
+**Layer 2 — Proxy-based auth verification.** The owner auth secret lives
+exclusively in the proxy container. When a user sends `auth <token>`, the
+agent's channel module sends an HTTP request to the proxy's `/auth/verify`
+endpoint with the candidate token in an `X-Auth-Token` header. The proxy
+compares it against the configured `OMEGACLAW_AUTH_SECRET` and returns
+`{"match":true}` or `{"match":false}`. The agent never possesses the
+secret — not in environment variables, files, Docker secrets, or memory.
 
 **Layer 3 — Entrypoint environment scrubbing.** The entrypoint uses
-`exec setpriv ... env -i` to drop to UID 65534 and replace itself with
-a clean environment containing only allowlisted, non-secret variables.
-This ensures `/proc/1/environ` contains nothing sensitive. Note that
-Python `os.environ.pop()` alone is inadequate to protect secrets because
-the original values would persist in `/proc/1/environ` and
-`/proc/1/cmdline`.
+`exec env -i` to replace itself with a clean environment containing only
+allowlisted, non-secret variables. The agent runs as UID 65534 (set by
+`USER` in the Dockerfile). This ensures `/proc/1/environ` contains
+nothing sensitive.
 
 **Layer 4 — Network isolation (restricted mode only).** The agent container
 sits on a Docker internal network with no route to the internet. It can
@@ -92,37 +89,31 @@ third-party integrations. API keys are still hidden in the proxy.
 
 ### Verify secret isolation
 
-The container starts as root so the entrypoint can read the root-owned
-Docker secret, then drops to UID 65534 via `setpriv`. Use `--user
-65534:65534` with `docker compose exec` to simulate the agent's actual
-environment (plain `docker exec` runs as the container's default user,
-which is root — that does not reflect what the agent sees).
-
 ```bash
 # 1. Agent runs as unprivileged user
-docker compose exec --user 65534:65534 omegaclaw id
+docker compose exec omegaclaw id
 # Expected: uid=65534(nobody) gid=65534(nogroup)
 
 # 2. No secrets in agent's environment
-docker compose exec --user 65534:65534 omegaclaw env
-# Expected: LLM_PROXY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET
+docker compose exec omegaclaw env
+# Expected: LLM_PROXY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET, no tokens
 
-# 3. Docker secret file unreadable by agent (root-owned, mode 0400)
-docker compose exec --user 65534:65534 omegaclaw cat /run/secrets/omegaclaw_auth_secret
-# Expected: Permission denied
-
-# 4. Auth secret temp file deleted by Python at startup
-docker compose exec --user 65534:65534 omegaclaw cat /tmp/.auth_secret
+# 3. No Docker secrets mounted in agent
+docker compose exec omegaclaw ls /run/secrets/ 2>&1
 # Expected: No such file or directory
 
-# 5. Agent process is UID 65534 (verify via /proc)
-docker compose exec omegaclaw sh -c "cat /proc/*/status 2>/dev/null | grep -A8 'Name:.*swipl' | grep Uid"
-# Expected: Uid: 65534   65534   65534   65534
+# 4. Proxy auth endpoints work
+docker compose exec omegaclaw wget -qO- http://llm-proxy:8080/auth/status
+# Expected: {"enabled":true}  (when OMEGACLAW_AUTH_SECRET is set)
 
-# 6. Bot tokens in proxy only, not the agent
-docker compose exec llm-proxy env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN'
-docker compose exec --user 65534:65534 omegaclaw env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN'
-# First command shows tokens; second shows nothing.
+docker compose exec omegaclaw \
+  wget -qO- --header="X-Auth-Token: wrong" http://llm-proxy:8080/auth/verify
+# Expected: {"match":false}
+
+# 5. Bot tokens and auth secret in proxy only
+docker compose exec llm-proxy env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
+docker compose exec omegaclaw env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
+# First command shows tokens and secret; second shows nothing.
 ```
 
 ## Restricted Mode (no direct internet)
@@ -303,10 +294,9 @@ template, so no changes to `proxy/entrypoint.sh` are needed.
 
 ## Read-Only Runtime
 
-The container starts as root only for entrypoint secret handling, then
-drops to UID 65534 (nobody) via `setpriv` before the agent starts.
-`security_opt: no-new-privileges` prevents re-escalation. Writable
-locations are limited to:
+The container runs as UID 65534 (nobody) via the Dockerfile `USER`
+directive. `security_opt: no-new-privileges` prevents privilege
+escalation. Writable locations are limited to:
 
 - `omegaclaw-memory` volume (mounted at the memory directory)
 - `/tmp`, `/var/tmp` (tmpfs mounts, ephemeral)

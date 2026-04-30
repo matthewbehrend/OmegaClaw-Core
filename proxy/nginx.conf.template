@@ -93,6 +93,29 @@ http {
             proxy_read_timeout 300s;
         }
 
+        # Auth secret verification — agent sends candidate token, proxy compares.
+        # After envsubst, ${OMEGACLAW_AUTH_SECRET} becomes the literal secret.
+        set $auth_secret_value "${OMEGACLAW_AUTH_SECRET}";
+
+        location = /auth/status {
+            default_type application/json;
+            if ($auth_secret_value = "") {
+                return 200 '{"enabled":false}';
+            }
+            return 200 '{"enabled":true}';
+        }
+
+        location = /auth/verify {
+            default_type application/json;
+            if ($auth_secret_value = "") {
+                return 200 '{"match":true}';
+            }
+            if ($http_x_auth_token = "${OMEGACLAW_AUTH_SECRET}") {
+                return 200 '{"match":true}';
+            }
+            return 200 '{"match":false}';
+        }
+
         location /health {
             return 200 "ok\n";
             add_header Content-Type text/plain;

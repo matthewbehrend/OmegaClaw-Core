@@ -1,8 +1,10 @@
+import json
 import random
 import socket
 import threading
 import time
 import textwrap
+import urllib.request
 
 _running = False
 _sock = None
@@ -12,8 +14,9 @@ _msg_lock = threading.Lock()
 _channel = None
 _connected = False
 _auth_lock = threading.Lock()
-_auth_secret = ""
+_auth_enabled = False
 _authenticated_nick = None
+_proxy_url = ""
 
 def _send(cmd):
     with _sock_lock:
@@ -37,11 +40,22 @@ def getLastMessage():
         return tmp
 
 
-def _set_auth_secret(secret=None):
-    global _auth_secret, _authenticated_nick
-    with _auth_lock:
-        _auth_secret = (secret or "").strip()
-        _authenticated_nick = None
+def _verify_token(candidate):
+    if not _proxy_url:
+        return True
+    url = f"{_proxy_url}/auth/verify"
+    req = urllib.request.Request(url)
+    req.add_header("X-Auth-Token", str(candidate))
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read()).get("match", False)
+    except Exception:
+        return False
+
+
+def _is_auth_command(msg):
+    lower = msg.strip().lower()
+    return lower.startswith("auth ") or lower.startswith("/auth ")
 
 
 def _normalize_nick(nick):
@@ -60,19 +74,19 @@ def _parse_auth_candidate(msg):
 
 def _is_allowed_message(nick, msg):
     global _authenticated_nick
-    candidate = _parse_auth_candidate(msg)
     norm_nick = _normalize_nick(nick)
     with _auth_lock:
-        if not _auth_secret:  # no secret configured — open to all users
+        if not _auth_enabled:
             return "allow"
-        if candidate == _auth_secret:
-            if _authenticated_nick is None:
-                _authenticated_nick = norm_nick
-                return "auth_bound"
+        if _authenticated_nick is not None:
+            return "allow" if norm_nick == _authenticated_nick else "ignore"
+        if not _is_auth_command(msg):
             return "ignore"
-        if _authenticated_nick is None:
-            return "ignore"
-        return "allow" if norm_nick == _authenticated_nick else "ignore"
+        candidate = _parse_auth_candidate(msg)
+        if _verify_token(candidate):
+            _authenticated_nick = norm_nick
+            return "auth_bound"
+        return "ignore"
 
 def _irc_loop(channel, server, port, nick):
     global _running, _sock, _connected
@@ -136,15 +150,24 @@ def _irc_loop(channel, server, port, nick):
     sock.close()
     print("[IRC] Disconnected")
 
-def start_irc(channel, server="irc.libera.chat", port=6667, nick="omegaclaw", auth_secret=None):
-    global _running, _channel, _connected
+def start_irc(channel, server="irc.libera.chat", port=6667, nick="omegaclaw"):
+    global _running, _channel, _connected, _auth_enabled, _proxy_url
+    import os
+    _proxy_url = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    if _proxy_url:
+        try:
+            with urllib.request.urlopen(f"{_proxy_url}/auth/status", timeout=5) as resp:
+                _auth_enabled = json.loads(resp.read()).get("enabled", False)
+        except Exception:
+            _auth_enabled = False
+    else:
+        _auth_enabled = False
     nick = f"{nick}{random.randint(1000, 9999)}"
     if not channel.startswith("#"):
         channel = f"#{channel}"
     _running = True
     _connected = False
     _channel = channel
-    _set_auth_secret(auth_secret)
     t = threading.Thread(target=_irc_loop, args=(channel, server, port, nick), daemon=True)
     t.start()
     return t

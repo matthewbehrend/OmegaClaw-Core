@@ -37,7 +37,3 @@ networks:
 
 volumes:
   omegaclaw-memory:
-
-secrets:
-  omegaclaw_auth_secret:
-    environment: OMEGACLAW_AUTH_SECRET

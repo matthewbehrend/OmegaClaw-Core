@@ -10,13 +10,10 @@ image="${1:?usage: $0 <container-image>}"
 # Create temporary files
 tmp_config_file="$(mktemp)"
 tmp_py_file="$(mktemp)"
-secrets_dir="$(mktemp -d)"
-chmod 0700 "$secrets_dir"
 use_proxy=false
 
 cleanup() {
   rm -f "$tmp_config_file" "$tmp_py_file"
-  rm -rf "$secrets_dir"
   docker rm -f omegaclaw 2>/dev/null || true
   if [ "$use_proxy" = true ]; then
     docker rm -f omegaclaw-proxy 2>/dev/null || true
@@ -294,6 +291,7 @@ if [ -f "${proxy_dir}/Dockerfile" ]; then
   docker rm -f omegaclaw-proxy 2>/dev/null || true
   proxy_env=(
     -e "${api_token_var}=${api_token}"
+    -e "OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET}"
   )
   if [ -n "${TG_BOT_TOKEN:-}" ]; then
     proxy_env+=(-e "TG_BOT_TOKEN=${TG_BOT_TOKEN}")
@@ -321,16 +319,13 @@ else
 fi
 
 # ---- Start agent container ----
-printf '%s' "$OMEGACLAW_AUTH_SECRET" > "$secrets_dir/omegaclaw_auth_secret"
-chmod 0400 "$secrets_dir/omegaclaw_auth_secret"
-
 docker_cmd=(
   docker run -d -it
   --name omegaclaw
   --init
+  --user 65534:65534
   --security-opt no-new-privileges:true
   --volume omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
-  --volume "$secrets_dir/omegaclaw_auth_secret:/run/secrets/omegaclaw_auth_secret:ro"
   --tmpfs /tmp:size=64m,mode=1777
   --tmpfs /var/tmp:size=64m,mode=1777
 )

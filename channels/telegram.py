@@ -16,9 +16,10 @@ _poll_timeout = 20
 _offset = None
 _connected = False
 
-_auth_secret = ""
+_auth_enabled = False
 _authenticated_user_id = None
 _authenticated_chat_id = None
+_proxy_url = ""
 
 
 def _set_last(msg):
@@ -38,12 +39,22 @@ def getLastMessage():
         return tmp
 
 
-def _set_auth_secret(secret=None):
-    global _auth_secret, _authenticated_user_id, _authenticated_chat_id
-    with _state_lock:
-        _auth_secret = (secret or "").strip()
-        _authenticated_user_id = None
-        _authenticated_chat_id = None
+def _verify_token(candidate):
+    if not _proxy_url:
+        return True
+    url = f"{_proxy_url}/auth/verify"
+    req = urllib.request.Request(url)
+    req.add_header("X-Auth-Token", str(candidate))
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return json.loads(resp.read()).get("match", False)
+    except Exception:
+        return False
+
+
+def _is_auth_command(msg):
+    lower = msg.strip().lower()
+    return lower.startswith("auth ") or lower.startswith("/auth ")
 
 
 def _parse_auth_candidate(msg):
@@ -119,7 +130,6 @@ def _initialize_offset():
 
 def _is_allowed_message(chat_id, user_id, msg):
     global _chat_id, _authenticated_user_id, _authenticated_chat_id
-    candidate = _parse_auth_candidate(msg)
 
     with _state_lock:
         if not _chat_id:
@@ -128,20 +138,23 @@ def _is_allowed_message(chat_id, user_id, msg):
         if _chat_id and chat_id != _chat_id:
             return "ignore"
 
-        if not _auth_secret:  # no secret configured — open to all users
+        if not _auth_enabled:
             return "allow"
 
-        if _authenticated_user_id is None:
-            if candidate == _auth_secret:
-                _authenticated_user_id = user_id
-                _authenticated_chat_id = chat_id
-                _chat_id = chat_id
-                return "auth_bound"
-            return "ignore"
+        if _authenticated_user_id is not None:
+            if chat_id != _authenticated_chat_id:
+                return "ignore"
+            return "allow" if user_id == _authenticated_user_id else "ignore"
 
-        if chat_id != _authenticated_chat_id:
+        if not _is_auth_command(msg):
             return "ignore"
-        return "allow" if user_id == _authenticated_user_id else "ignore"
+        candidate = _parse_auth_candidate(msg)
+        if _verify_token(candidate):
+            _authenticated_user_id = user_id
+            _authenticated_chat_id = chat_id
+            _chat_id = chat_id
+            return "auth_bound"
+        return "ignore"
 
 
 def _poll_loop():
@@ -195,19 +208,27 @@ def _poll_loop():
     print("[TELEGRAM] Polling stopped")
 
 
-def start_telegram(bot_token, chat_id="", poll_timeout=20, auth_secret=None):
+def start_telegram(bot_token, chat_id="", poll_timeout=20):
     global _running, _bot_token, _api_base, _chat_id, _poll_timeout, _offset, _connected
+    global _auth_enabled, _proxy_url
 
     import os
-    proxy_url = os.environ.get("LLM_PROXY_URL")
-    if proxy_url:
+    proxy = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    _proxy_url = proxy
+    if proxy:
         _bot_token = "proxy"
-        _api_base = f"{proxy_url.rstrip('/')}/telegram"
+        _api_base = f"{proxy}/telegram"
+        try:
+            with urllib.request.urlopen(f"{proxy}/auth/status", timeout=5) as resp:
+                _auth_enabled = json.loads(resp.read()).get("enabled", False)
+        except Exception:
+            _auth_enabled = False
     else:
         _bot_token = str(bot_token).strip()
         if not _bot_token:
             raise ValueError("TG_BOT_TOKEN is required")
         _api_base = f"https://api.telegram.org/bot{_bot_token}"
+        _auth_enabled = False
     _chat_id = str(chat_id).strip()
 
     try:
@@ -218,7 +239,6 @@ def start_telegram(bot_token, chat_id="", poll_timeout=20, auth_secret=None):
     _offset = None
     _running = True
     _connected = False
-    _set_auth_secret(auth_secret)
     print(f"[TELEGRAM] Starting adapter with chat target: {_chat_id or 'auto-bind'}")
     _initialize_offset()
 

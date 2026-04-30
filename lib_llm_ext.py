@@ -8,7 +8,7 @@ _PROXY_ROUTES = {
 }
 
 def _init_openai_client(var_name, base_url):
-    proxy_url = os.environ.get("LLM_PROXY_URL")
+    proxy_url = os.environ.get("GATEWAY_URL")
     if proxy_url:
         prefix = _PROXY_ROUTES.get(base_url.rstrip("/"))
         if prefix is None:

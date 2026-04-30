@@ -15,7 +15,7 @@ services:
     volumes:
       - omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
     environment:
-      - LLM_PROXY_URL=http://llm-proxy:8080
+      - GATEWAY_URL=http://gateway:8080
     command:
       - "commchannel=${COMM_CHANNEL:-irc}"
       - "provider=${PROVIDER:-Anthropic}"
@@ -28,7 +28,7 @@ services:
       - "MM_CHANNEL_ID=${MM_CHANNEL_ID:-}"
     restart: unless-stopped
 
-  llm-proxy-base:
+  gateway-base:
     build:
       context: ./proxy
       dockerfile: Dockerfile

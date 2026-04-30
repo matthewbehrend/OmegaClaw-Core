@@ -16,7 +16,7 @@ cleanup() {
   rm -f "$tmp_config_file" "$tmp_py_file"
   docker rm -f omegaclaw 2>/dev/null || true
   if [ "$use_proxy" = true ]; then
-    docker rm -f omegaclaw-proxy 2>/dev/null || true
+    docker rm -f omegaclaw-gateway 2>/dev/null || true
     docker network rm omegaclaw-net 2>/dev/null || true
   fi
 }
@@ -284,11 +284,11 @@ proxy_dir="${repo_root}/proxy"
 
 if [ -f "${proxy_dir}/Dockerfile" ]; then
   use_proxy=true
-  proxy_image="omegaclaw-proxy:latest"
-  echo "Building LLM proxy image..."
+  proxy_image="omegaclaw-gateway:latest"
+  echo "Building gateway image..."
   docker build -q -t "$proxy_image" "$proxy_dir"
   docker network create omegaclaw-net 2>/dev/null || true
-  docker rm -f omegaclaw-proxy 2>/dev/null || true
+  docker rm -f omegaclaw-gateway 2>/dev/null || true
   proxy_env=(
     -e "${api_token_var}=${api_token}"
     -e "OMEGACLAW_AUTH_SECRET=${OMEGACLAW_AUTH_SECRET}"
@@ -301,21 +301,21 @@ if [ -f "${proxy_dir}/Dockerfile" ]; then
     proxy_env+=(-e "MM_UPSTREAM_URL=${MM_URL:-https://chat.singularitynet.io}")
   fi
   docker run -d \
-    --name omegaclaw-proxy \
+    --name omegaclaw-gateway \
     --network omegaclaw-net \
     --restart unless-stopped \
     "${proxy_env[@]}" \
     "$proxy_image" >/dev/null
   echo "Waiting for proxy..."
   for i in $(seq 1 10); do
-    if docker exec omegaclaw-proxy wget -qO- http://localhost:8080/health 2>/dev/null; then
+    if docker exec omegaclaw-gateway wget -qO- http://localhost:8080/health 2>/dev/null; then
       break
     fi
     sleep 1
   done
-  echo "LLM proxy ready. API key isolated from agent container."
+  echo "Gateway ready. Secrets isolated from agent container."
 else
-  echo "WARNING: proxy/ not found. Running without API key isolation." >&2
+  echo "WARNING: proxy/ not found. Running without secret isolation." >&2
 fi
 
 # ---- Start agent container ----
@@ -333,7 +333,7 @@ docker_cmd=(
 if [ "$use_proxy" = true ]; then
   docker_cmd+=(
     --network omegaclaw-net
-    -e "LLM_PROXY_URL=http://omegaclaw-proxy:8080"
+    -e "GATEWAY_URL=http://omegaclaw-gateway:8080"
   )
 else
   docker_cmd+=(-e "${api_token_var}=${api_token}")

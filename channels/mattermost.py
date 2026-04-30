@@ -156,7 +156,7 @@ def start_mattermost(MM_URL_, CHANNEL_ID_):
     global _running, MM_URL, CHANNEL_ID, BOT_TOKEN, _headers, _connected, _use_proxy
     global _auth_enabled, _proxy_url
     import os
-    proxy = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    proxy = os.environ.get("GATEWAY_URL", "").rstrip("/")
     _proxy_url = proxy
     if proxy:
         MM_URL = f"{proxy}/mattermost"

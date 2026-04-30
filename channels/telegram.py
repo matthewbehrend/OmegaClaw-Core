@@ -213,7 +213,7 @@ def start_telegram(chat_id="", poll_timeout=20):
     global _auth_enabled, _proxy_url
 
     import os
-    proxy = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    proxy = os.environ.get("GATEWAY_URL", "").rstrip("/")
     _proxy_url = proxy
     if proxy:
         _bot_token = "proxy"

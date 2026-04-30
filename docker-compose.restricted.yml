@@ -18,13 +18,13 @@ services:
     networks:
       - internal
     depends_on:
-      - llm-proxy
+      - gateway
       - irc-proxy
 
-  llm-proxy:
+  gateway:
     extends:
       file: docker-compose.base.yml
-      service: llm-proxy-base
+      service: gateway-base
     networks:
       - internal
       - external

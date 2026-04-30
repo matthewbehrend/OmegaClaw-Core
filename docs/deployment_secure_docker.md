@@ -12,8 +12,8 @@ for evaluation). An optional restricted mode adds full network isolation.
 │                    external network (internet)               │
 │                                                              │
 │  ┌───────────┐              ┌──────────────┐  HTTPS          │
-│  │ irc-proxy │  TCP         │  llm-proxy   │──TLS────────▸   │
-│  │ (socat)   │──────────▸   │  (nginx)     │  LLM + other    │
+│  │ irc-proxy │  TCP         │  gateway     │──TLS────────▸   │
+│  │ (socat)   │──────────▸   │  (nginx)     │  LLM + chat +   │
 │  └─────┬─────┘              └──────┬───────┘  APIs           │
 └────────┼───────────────────────────┼─────────────────────────┘
 ┌────────┼───────────────────────────┼─────────────────────────┐
@@ -30,7 +30,7 @@ for evaluation). An optional restricted mode adds full network isolation.
 **Layer 1 — Reverse proxy.** An nginx reverse proxy holds all API keys,
 **channel tokens** (Telegram bot token, Mattermost bot token), **and the
 owner auth secret**. The agent sends requests to
-`http://llm-proxy:8080/<path>` without credentials. The proxy injects
+`http://gateway:8080/<path>` without credentials. The proxy injects
 the real key or token and forwards over TLS. For Telegram, the proxy
 rewrites the URL to embed the bot token in the path. For Mattermost, it
 injects the Bearer Authorization header. The agent process never sees
@@ -96,22 +96,22 @@ docker compose exec omegaclaw id
 
 # 2. No secrets in agent's environment
 docker compose exec omegaclaw env
-# Expected: LLM_PROXY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET, no tokens
+# Expected: GATEWAY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET, no tokens
 
 # 3. Proxy auth endpoints work
 docker compose exec omegaclaw python3 -c \
-  "import urllib.request; print(urllib.request.urlopen('http://llm-proxy:8080/auth/status').read().decode())"
+  "import urllib.request; print(urllib.request.urlopen('http://gateway:8080/auth/status').read().decode())"
 # Expected: {"enabled":true}  (when OMEGACLAW_AUTH_SECRET is set)
 
 docker compose exec omegaclaw python3 -c "
 import urllib.request
-r = urllib.request.Request('http://llm-proxy:8080/auth/verify')
+r = urllib.request.Request('http://gateway:8080/auth/verify')
 r.add_header('X-Auth-Token', 'wrong')
 print(urllib.request.urlopen(r).read().decode())"
 # Expected: {"match":false}
 
 # 4. Bot tokens and auth secret in proxy only
-docker compose exec llm-proxy env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
+docker compose exec gateway env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
 docker compose exec omegaclaw env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN|AUTH_SECRET'
 # First command shows tokens and secret; second shows nothing.
 ```
@@ -126,7 +126,7 @@ docker compose -f docker-compose.restricted.yml up -d
 ```
 
 In this mode the agent can only reach services on the Docker internal
-network (llm-proxy, irc-proxy). IRC works via irc-proxy once `IRC_SERVER`
+network (gateway, irc-proxy). IRC works via irc-proxy once `IRC_SERVER`
 is pointed at it in `.env`. Other channels and external services require
 allowlisting (see below).
 
@@ -156,7 +156,7 @@ location /telegram/ {
 ```
 
 If the endpoint needs an API key, add the variable to
-`docker-compose.restricted.yml` under `llm-proxy.environment`:
+`docker-compose.restricted.yml` under `gateway.environment`:
 
 ```yaml
 - TAVILY_API_KEY=${TAVILY_API_KEY:-}
@@ -174,7 +174,7 @@ no changes to `entrypoint.sh` are needed.
 2. Rebuild the proxy:
 
 ```bash
-docker compose -f docker-compose.restricted.yml up -d --build llm-proxy
+docker compose -f docker-compose.restricted.yml up -d --build gateway
 ```
 
 ### Option B — Add a socat service (raw TCP endpoints)
@@ -205,7 +205,7 @@ the proxy hostname instead of the real server.
 ```bash
 # Confirm the proxy endpoint is reachable from the agent:
 docker compose -f docker-compose.restricted.yml exec omegaclaw \
-  wget -qO- http://llm-proxy:8080/health
+  wget -qO- http://gateway:8080/health
 
 # Confirm direct internet is still blocked:
 docker compose -f docker-compose.restricted.yml exec omegaclaw \
@@ -286,8 +286,8 @@ To route a new external API through the proxy (hiding its key from the agent):
 
 1. Add the key to `.env`
 2. Add a `location` block in `proxy/nginx.conf.template` using `${YOUR_KEY}`
-3. Pass the variable to `llm-proxy` in the compose `environment` section
-4. Rebuild: `docker compose up -d --build llm-proxy`
+3. Pass the variable to `gateway` in the compose `environment` section
+4. Rebuild: `docker compose up -d --build gateway`
 
 The proxy entrypoint auto-detects `${VAR}` references in the nginx
 template, so no changes to `proxy/entrypoint.sh` are needed.
@@ -338,7 +338,7 @@ docker compose -f docker-compose.restricted.yml down -v
 
 The `scripts/omegaclaw` interactive setup script provides a guided
 deployment path. When run from within the repository, it automatically
-builds and starts the LLM proxy alongside the agent container, providing
+builds and starts the gateway alongside the agent container, providing
 the same API key isolation as docker-compose. If the `proxy/` directory
 is not found (e.g., the script is distributed standalone), it falls back
 to passing the API key directly to the agent with a warning.

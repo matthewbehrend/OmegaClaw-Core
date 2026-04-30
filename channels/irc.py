@@ -153,7 +153,7 @@ def _irc_loop(channel, server, port, nick):
 def start_irc(channel, server="irc.libera.chat", port=6667, nick="omegaclaw"):
     global _running, _channel, _connected, _auth_enabled, _proxy_url
     import os
-    _proxy_url = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+    _proxy_url = os.environ.get("GATEWAY_URL", "").rstrip("/")
     if _proxy_url:
         try:
             with urllib.request.urlopen(f"{_proxy_url}/auth/status", timeout=5) as resp:

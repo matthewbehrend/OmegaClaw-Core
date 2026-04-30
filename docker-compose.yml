@@ -1,5 +1,5 @@
 # Default deployment: agent has full network access for web search, RAG, etc.
-# API keys remain hidden in the proxy — the agent never sees them.
+# All secrets remain hidden in the gateway — the agent never sees them.
 # See docs/deployment-secure-docker.md for full documentation.
 #
 # Quick start:
@@ -19,12 +19,12 @@ services:
       - internal
       - external
     depends_on:
-      - llm-proxy
+      - gateway
 
-  llm-proxy:
+  gateway:
     extends:
       file: docker-compose.base.yml
-      service: llm-proxy-base
+      service: gateway-base
     networks:
       - internal
       - external

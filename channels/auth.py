@@ -9,7 +9,7 @@ _auth_enabled = None
 def _get_proxy_url():
     global _proxy_url
     if _proxy_url is None:
-        _proxy_url = os.environ.get("LLM_PROXY_URL", "").rstrip("/")
+        _proxy_url = os.environ.get("GATEWAY_URL", "").rstrip("/")
     return _proxy_url
 
 

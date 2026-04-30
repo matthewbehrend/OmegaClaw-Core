@@ -198,11 +198,16 @@ def _poll_loop():
 def start_telegram(bot_token, chat_id="", poll_timeout=20, auth_secret=None):
     global _running, _bot_token, _api_base, _chat_id, _poll_timeout, _offset, _connected
 
-    _bot_token = str(bot_token).strip()
-    if not _bot_token:
-        raise ValueError("TG_BOT_TOKEN is required")
-
-    _api_base = f"https://api.telegram.org/bot{_bot_token}"
+    import os
+    proxy_url = os.environ.get("LLM_PROXY_URL")
+    if proxy_url:
+        _bot_token = "proxy"
+        _api_base = f"{proxy_url.rstrip('/')}/telegram"
+    else:
+        _bot_token = str(bot_token).strip()
+        if not _bot_token:
+            raise ValueError("TG_BOT_TOKEN is required")
+        _api_base = f"https://api.telegram.org/bot{_bot_token}"
     _chat_id = str(chat_id).strip()
 
     try:

@@ -21,14 +21,14 @@
                        (configure IRC_user omegaclaw)
                        (py-call (irc.start_irc (IRC_channel) (IRC_server) (IRC_port) (IRC_user) $secret)))
                 (if (== (commchannel) telegram)
-                    (let $tg_token (py-call (secrets.read_tg_bot_token))
+                    (let $tg_token (py-call (channel_secrets.read_tg_bot_token))
                       (progn (configure TG_CHAT_ID "")
                              (configure TG_POLL_TIMEOUT 20)
                              (py-call (telegram.start_telegram $tg_token (TG_CHAT_ID) (TG_POLL_TIMEOUT) $secret))))
-                    (let $mm_token (py-call (secrets.read_mm_bot_token))
+                    (let $mm_token (py-call (channel_secrets.read_mm_bot_token))
                       (progn (configure MM_URL "https://chat.singularitynet.io")
                              (configure MM_CHANNEL_ID "8fjrmabjx7gupy7e5kjznpt5qh")
-                             (py-call (mattermost.start_mattermost (MM_URL) (MM_CHANNEL_ID) $mm_token $secret))))))))
+                             (py-call (mattermost.start_mattermost (MM_URL) (MM_CHANNEL_ID) $mm_token $secret)))))))))
 
 ;Receive the latest user message considering all communication channels:
 (= (receive)

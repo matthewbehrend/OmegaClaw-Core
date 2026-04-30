@@ -115,7 +115,5 @@ RUN cp ${OMEGACLAW_DIR}/run.metta /PeTTa/run.metta \
  && chmod 0444 ${MEMORY_DIR}/prompt.txt \
  && chown -R 65534:65534 /opt/huggingface /opt/sentence_transformers
 
-USER 65534:65534
-
 ENTRYPOINT ["sh", "repos/OmegaClaw-Core/entrypoint.sh", "run.metta"]
 CMD []

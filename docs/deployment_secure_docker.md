@@ -27,25 +27,31 @@ for evaluation). An optional restricted mode adds full network isolation.
 └──────────────────────────────────────────────────────────────┘
 ```
 
-**Layer 1 — Reverse proxy.** An nginx reverse proxy holds all API keys.
-The agent sends requests to `http://llm-proxy:8080/<path>` without
-credentials. The proxy injects the real key and forwards over TLS. The
-agent process never sees API keys.
+**Layer 1 — Reverse proxy.** An nginx reverse proxy holds all API keys
+**and channel tokens** (Telegram bot token, Mattermost bot token). The
+agent sends requests to `http://llm-proxy:8080/<path>` without
+credentials. The proxy injects the real key or token and forwards over
+TLS. For Telegram, the proxy rewrites the URL to embed the bot token in
+the path. For Mattermost, it injects the Bearer Authorization header.
+The agent process never sees any API key or channel token.
 
-**Layer 2 — File-based Docker secrets.** Channel tokens and the owner
-auth secret are delivered as files under `/run/secrets/` using Docker
-Compose's `secrets:` directive. They never appear in environment variables
-or CLI arguments, so the agent cannot discover them via `env`,
-`/proc/1/environ`, or `/proc/1/cmdline`. Python `os.environ.pop()` alone
-is inadequate because the original values would persist in
-`/proc/1/environ` and `/proc/1/cmdline`.
+**Layer 2 — Root-owned Docker secret + ephemeral handoff.** The owner
+auth secret is delivered as a Docker Compose secret file at
+`/run/secrets/omegaclaw_auth_secret`, owned by root with mode 0400.
+The entrypoint (running as root) reads this file, writes the value to
+`/tmp/.auth_secret` (owned by UID 65534, mode 0400), then drops
+privileges to UID 65534 via `setpriv`. Python reads and immediately
+deletes `/tmp/.auth_secret` at startup. The secret never appears as a
+Docker environment variable, so `docker exec env` and `docker inspect`
+are both clean.
 
-**Layer 3 — Entrypoint environment scrubbing (defense in depth).** A
-wrapper entrypoint (`entrypoint.sh`) uses `exec env -i` to replace
-itself with a clean environment containing only allowlisted, non-secret
-variables. Since secrets are delivered as files (Layer 2) and never as
-env vars, this layer guards against accidental env var leaks from
-compose overrides or future configuration changes.
+**Layer 3 — Entrypoint environment scrubbing.** The entrypoint uses
+`exec setpriv ... env -i` to drop to UID 65534 and replace itself with
+a clean environment containing only allowlisted, non-secret variables.
+This ensures `/proc/1/environ` contains nothing sensitive. Note that
+Python `os.environ.pop()` alone is inadequate to protect secrets because
+the original values would persist in `/proc/1/environ` and
+`/proc/1/cmdline`.
 
 **Layer 4 — Network isolation (restricted mode only).** The agent container
 sits on a Docker internal network with no route to the internet. It can
@@ -86,18 +92,37 @@ third-party integrations. API keys are still hidden in the proxy.
 
 ### Verify secret isolation
 
+The container starts as root so the entrypoint can read the root-owned
+Docker secret, then drops to UID 65534 via `setpriv`. Use `--user
+65534:65534` with `docker compose exec` to simulate the agent's actual
+environment (plain `docker exec` runs as the container's default user,
+which is root — that does not reflect what the agent sees).
+
 ```bash
-# Should show only LLM_PROXY_URL, PATH, HOME, etc. — no secrets.
-docker compose exec omegaclaw env
+# 1. Agent runs as unprivileged user
+docker compose exec --user 65534:65534 omegaclaw id
+# Expected: uid=65534(nobody) gid=65534(nogroup)
 
-# Verify /proc/1/environ is clean (no secrets in original process env):
-docker compose exec omegaclaw sh -c "cat /proc/1/environ | tr '\0' '\n'"
+# 2. No secrets in agent's environment
+docker compose exec --user 65534:65534 omegaclaw env
+# Expected: LLM_PROXY_URL, PATH, HOME — no OMEGACLAW_AUTH_SECRET
 
-# Verify /proc/1/cmdline has no tokens:
-docker compose exec omegaclaw sh -c "cat /proc/1/cmdline | tr '\0' '\n'"
+# 3. Docker secret file unreadable by agent (root-owned, mode 0400)
+docker compose exec --user 65534:65534 omegaclaw cat /run/secrets/omegaclaw_auth_secret
+# Expected: Permission denied
 
-# Secrets are delivered as files (expected — agent holds these in memory anyway):
-docker compose exec omegaclaw ls /run/secrets/
+# 4. Auth secret temp file deleted by Python at startup
+docker compose exec --user 65534:65534 omegaclaw cat /tmp/.auth_secret
+# Expected: No such file or directory
+
+# 5. Agent process is UID 65534 (verify via /proc)
+docker compose exec omegaclaw sh -c "cat /proc/*/status 2>/dev/null | grep -A8 'Name:.*swipl' | grep Uid"
+# Expected: Uid: 65534   65534   65534   65534
+
+# 6. Bot tokens in proxy only, not the agent
+docker compose exec llm-proxy env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN'
+docker compose exec --user 65534:65534 omegaclaw env | grep -E 'TG_BOT_TOKEN|MM_BOT_TOKEN'
+# First command shows tokens; second shows nothing.
 ```
 
 ## Restricted Mode (no direct internet)
@@ -278,12 +303,13 @@ template, so no changes to `proxy/entrypoint.sh` are needed.
 
 ## Read-Only Runtime
 
-The agent container runs as UID 65534 (nobody) with a read-only filesystem.
-Writable locations are limited to:
+The container starts as root only for entrypoint secret handling, then
+drops to UID 65534 (nobody) via `setpriv` before the agent starts.
+`security_opt: no-new-privileges` prevents re-escalation. Writable
+locations are limited to:
 
 - `omegaclaw-memory` volume (mounted at the memory directory)
 - `/tmp`, `/var/tmp` (tmpfs mounts, ephemeral)
-- `/run/secrets` (Docker Compose secrets mount, read-only)
 
 All other paths (`/PeTTa`, the MeTTa runtime, agent source code) are
 root-owned and read-only. This is intentional — it prevents the agent from
@@ -291,23 +317,17 @@ modifying its own code or runtime at the filesystem level.
 
 ## Known Limitations
 
-1. **Secret files persist in `/run/secrets/`.** Docker Compose mounts
-   secret files as root-owned, read-only. The agent (UID 65534) can read
-   but not delete them. This is acceptable because the agent already holds
-   these tokens in Python memory — the files do not expand the attack
-   surface. The security win is eliminating secrets from `/proc/1/environ`
-   and `/proc/1/cmdline`, which are harder to defend.
-
-2. **OpenAI provider**: The `useGPT` function in PeTTa's `lib_llm` reads
+1. **OpenAI provider**: The `useGPT` function in PeTTa's `lib_llm` reads
    `OPENAI_API_KEY` directly. The proxy cannot intercept this. In default
    mode this works naturally. In restricted mode, add `OPENAI_API_KEY` to
    the agent's environment in a compose override.
 
-3. **Mattermost WebSocket**: Mattermost uses HTTPS and WSS. In default mode
-   this works directly. In restricted mode, add a proxy entry for your
-   Mattermost server.
+2. **Mattermost WebSocket**: Mattermost uses HTTPS and WSS. The proxy
+   handles both HTTP API calls and WebSocket upgrades. The
+   `proxy_read_timeout` is set to 300s for the Mattermost location to
+   accommodate long-lived WebSocket connections.
 
-4. **`git-import!` at startup**: `run.metta` calls `git-import!` for repos
+3. **`git-import!` at startup**: `run.metta` calls `git-import!` for repos
    present in the Docker image. PeTTa skips cloning when the directory
    exists. If it attempts a `git fetch`, this fails harmlessly in restricted
    mode.

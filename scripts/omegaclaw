@@ -11,6 +11,7 @@ image="${1:?usage: $0 <container-image>}"
 tmp_config_file="$(mktemp)"
 tmp_py_file="$(mktemp)"
 secrets_dir="$(mktemp -d)"
+chmod 0700 "$secrets_dir"
 use_proxy=false
 
 cleanup() {
@@ -27,7 +28,6 @@ trap cleanup EXIT INT TERM
 # Lock down permissions immediately after creation
 chmod 0600 "$tmp_config_file"
 chmod 0600 "$tmp_py_file"
-chmod 0700 "$secrets_dir"
 
 cat >"$tmp_py_file" <<'PY'
 import getpass
@@ -280,16 +280,6 @@ fi
 
 docker rm -f omegaclaw 2>/dev/null || true
 
-# ---- Write secrets as files (never passed as env vars or CLI args) ----
-printf '%s' "$OMEGACLAW_AUTH_SECRET" > "$secrets_dir/omegaclaw_auth_secret"
-if [ -n "${TG_BOT_TOKEN:-}" ]; then
-  printf '%s' "$TG_BOT_TOKEN" > "$secrets_dir/tg_bot_token"
-fi
-if [ -n "${MM_BOT_TOKEN:-}" ]; then
-  printf '%s' "$MM_BOT_TOKEN" > "$secrets_dir/mm_bot_token"
-fi
-chmod 0444 "$secrets_dir"/*
-
 # ---- Proxy setup (if proxy/ directory is available) ----
 script_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
@@ -302,11 +292,21 @@ if [ -f "${proxy_dir}/Dockerfile" ]; then
   docker build -q -t "$proxy_image" "$proxy_dir"
   docker network create omegaclaw-net 2>/dev/null || true
   docker rm -f omegaclaw-proxy 2>/dev/null || true
+  proxy_env=(
+    -e "${api_token_var}=${api_token}"
+  )
+  if [ -n "${TG_BOT_TOKEN:-}" ]; then
+    proxy_env+=(-e "TG_BOT_TOKEN=${TG_BOT_TOKEN}")
+  fi
+  if [ -n "${MM_BOT_TOKEN:-}" ]; then
+    proxy_env+=(-e "MM_BOT_TOKEN=${MM_BOT_TOKEN}")
+    proxy_env+=(-e "MM_UPSTREAM_URL=${MM_URL:-https://chat.singularitynet.io}")
+  fi
   docker run -d \
     --name omegaclaw-proxy \
     --network omegaclaw-net \
     --restart unless-stopped \
-    -e "${api_token_var}=${api_token}" \
+    "${proxy_env[@]}" \
     "$proxy_image" >/dev/null
   echo "Waiting for proxy..."
   for i in $(seq 1 10); do
@@ -321,14 +321,16 @@ else
 fi
 
 # ---- Start agent container ----
+printf '%s' "$OMEGACLAW_AUTH_SECRET" > "$secrets_dir/omegaclaw_auth_secret"
+chmod 0400 "$secrets_dir/omegaclaw_auth_secret"
+
 docker_cmd=(
   docker run -d -it
   --name omegaclaw
   --init
-  --user 65534:65534
   --security-opt no-new-privileges:true
   --volume omegaclaw-memory:/PeTTa/repos/OmegaClaw-Core/memory
-  --volume "${secrets_dir}:/run/secrets:ro"
+  --volume "$secrets_dir/omegaclaw_auth_secret:/run/secrets/omegaclaw_auth_secret:ro"
   --tmpfs /tmp:size=64m,mode=1777
   --tmpfs /var/tmp:size=64m,mode=1777
 )
@@ -340,6 +342,12 @@ if [ "$use_proxy" = true ]; then
   )
 else
   docker_cmd+=(-e "${api_token_var}=${api_token}")
+  if [ -n "${TG_BOT_TOKEN:-}" ]; then
+    docker_cmd+=(-e "TG_BOT_TOKEN=${TG_BOT_TOKEN}")
+  fi
+  if [ -n "${MM_BOT_TOKEN:-}" ]; then
+    docker_cmd+=(-e "MM_BOT_TOKEN=${MM_BOT_TOKEN}")
+  fi
 fi
 
 docker_cmd+=(

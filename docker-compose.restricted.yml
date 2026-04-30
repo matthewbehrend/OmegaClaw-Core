@@ -47,13 +47,9 @@ networks:
   external:
     driver: bridge
 
+volumes:
+  omegaclaw-memory:
+
 secrets:
   omegaclaw_auth_secret:
     environment: OMEGACLAW_AUTH_SECRET
-  tg_bot_token:
-    environment: TG_BOT_TOKEN
-  mm_bot_token:
-    environment: MM_BOT_TOKEN
-
-volumes:
-  omegaclaw-memory:

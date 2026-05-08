@@ -52,8 +52,7 @@
    (progn (if (== $k 1) (progn (initLoop)
                                (initMemory)
                                (initChannels)) _)
-          (let $prompt (getContext)
-               (progn (println! (---------iteration $k))
+          (progn (println! (---------iteration $k))
                       (let* (($msgrcv (string-safe (repr (receive))))
                              ($msgnew (prog1 (and (> (string_length $msgrcv) 0) (!= $msgrcv (get-state &prevmsg)))
                                              (if (> (string_length $msgrcv) 0) (change-state! &prevmsg $msgrcv) _)))
@@ -69,7 +68,8 @@
                                             (change-state! &triggerReason "scheduled_wakeup")
                                             (change-state! &loops (+ 1 (maxWakeLoops)))) _)))
                             (if (and (get-state &busy) (> (get-state &loops) 0))
-                                (let* (($lastmessage (if $msgnew
+                                (let* (($prompt (getContext))
+                                       ($lastmessage (if $msgnew
                                                       (NEW-HUMAN-MSG: $msg)
                                                       (if (== (get-state &triggerReason) "scheduled_wakeup")
                                                           "WAKE-UP: No new input. Check memory for goals and pursue them."
@@ -121,4 +121,4 @@
                                            (change-state! &nextWakeAt (+ (get_time) (wakeupInterval))))
                                     _)))
                       (sleep (sleepInterval))
-                      (omegaclaw (+ 1 $k))))))
+                      (omegaclaw (+ 1 $k)))))
